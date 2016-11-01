@@ -59,9 +59,8 @@ TRACE_DEFINE_ENUM(CP_TRIMMED);
 		{ IPU,		"IN-PLACE" },				\
 		{ OPU,		"OUT-OF-PLACE" })
 
-#define F2FS_OP_FLAGS (REQ_RAHEAD | REQ_SYNC | REQ_META | REQ_PRIO |	\
-			REQ_PREFLUSH | REQ_FUA)
-#define F2FS_BIO_FLAG_MASK(t)	(t & F2FS_OP_FLAGS)
+#define F2FS_BIO_FLAG_MASK(t)	(t & (REQ_RAHEAD | REQ_PREFLUSH | REQ_FUA))
+#define F2FS_BIO_EXTRA_MASK(t)	(t & (REQ_META | REQ_PRIO))
 
 #define show_bio_type(op,op_flags)	show_bio_op(op),		\
 						show_bio_op_flags(op_flags)
@@ -75,19 +74,19 @@ TRACE_DEFINE_ENUM(CP_TRIMMED);
 		{ REQ_OP_WRITE_SAME,		"WRITE_SAME" })
 
 #define show_bio_op_flags(flags)					\
-	__print_flags(F2FS_BIO_FLAG_MASK(flags), "|",			\
-		{ REQ_RAHEAD,		"R" },				\
-		{ REQ_SYNC,		"S" },				\
-		{ REQ_META,		"M" },				\
-		{ REQ_PRIO,		"P" },				\
-		{ REQ_PREFLUSH,		"PF" },				\
-		{ REQ_FUA,		"FUA" })
+	__print_symbolic(F2FS_BIO_FLAG_MASK(flags),			\
+		{ 0,			"WRITE" },			\
+		{ REQ_RAHEAD, 		"READAHEAD" },			\
+		{ REQ_SYNC, 		"REQ_SYNC" },			\
+		{ REQ_PREFLUSH,		"REQ_PREFLUSH" },		\
+		{ REQ_FUA,		"REQ_FUA" })
 
-#define show_block_temp(temp)						\
-	__print_symbolic(temp,						\
-		{ HOT,		"HOT" },				\
-		{ WARM,		"WARM" },				\
-		{ COLD,		"COLD" })
+#define show_bio_extra(type)						\
+	__print_symbolic(F2FS_BIO_EXTRA_MASK(type),			\
+		{ REQ_META, 		"(M)" },			\
+		{ REQ_PRIO, 		"(P)" },			\
+		{ REQ_META | REQ_PRIO,	"(MP)" },			\
+		{ 0, " \b" })
 
 #define show_data_type(type)						\
 	__print_symbolic(type,						\

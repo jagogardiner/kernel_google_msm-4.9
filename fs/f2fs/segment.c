@@ -615,10 +615,9 @@ repeat:
 		fcc->dispatch_list = llist_del_all(&fcc->issue_list);
 		fcc->dispatch_list = llist_reverse_order(fcc->dispatch_list);
 
-		cmd = llist_entry(fcc->dispatch_list, struct flush_cmd, llnode);
-
-		ret = submit_flush_wait(sbi, cmd->ino);
-		atomic_inc(&fcc->issued_flush);
+		bio->bi_bdev = sbi->sb->s_bdev;
+		bio->bi_opf = REQ_OP_WRITE | REQ_PREFLUSH;
+		ret = submit_bio_wait(bio);
 
 		llist_for_each_entry_safe(cmd, next,
 					  fcc->dispatch_list, llnode) {
@@ -1491,11 +1490,14 @@ static int __issue_discard_cmd(struct f2fs_sb_info *sbi,
 				f2fs_time_over(sbi, dpolicy->timeout))
 				break;
 
-			if (dpolicy->io_aware && i < dpolicy->io_aware_gran &&
-						!is_idle(sbi, DISCARD_TIME)) {
-				io_interrupted = true;
-				break;
-			}
+		atomic_inc(&fcc->submit_flush);
+		bio->bi_bdev = sbi->sb->s_bdev;
+		bio->bi_opf = REQ_OP_WRITE | REQ_PREFLUSH;
+		ret = submit_bio_wait(bio);
+		atomic_dec(&fcc->submit_flush);
+		bio_put(bio);
+		return ret;
+	}
 
 			__submit_discard_cmd(sbi, dpolicy, dc, &issued);
 

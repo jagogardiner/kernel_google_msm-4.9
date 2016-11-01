@@ -4749,8 +4749,8 @@ static int ext4_commit_super(struct super_block *sb, int sync)
 	if (sync) {
 		unlock_buffer(sbh);
 		error = __sync_dirty_buffer(sbh,
-			test_opt(sb, BARRIER) ? WRITE_FUA : WRITE_SYNC);
-		if (error && !buffer_write_io_error(sbh))
+			test_opt(sb, BARRIER) ? REQ_FUA : REQ_SYNC);
+		if (error)
 			return error;
 
 		if (buffer_write_io_error(sbh)) {

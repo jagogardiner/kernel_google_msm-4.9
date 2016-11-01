@@ -483,9 +483,9 @@ static void __f2fs_submit_merged_write(struct f2fs_sb_info *sbi,
 	if (type >= META_FLUSH) {
 		io->fio.type = META_FLUSH;
 		io->fio.op = REQ_OP_WRITE;
-		io->fio.op_flags = REQ_META | REQ_PRIO | REQ_SYNC;
+		io->fio.op_flags = REQ_PREFLUSH | REQ_META | REQ_PRIO;
 		if (!test_opt(sbi, NOBARRIER))
-			io->fio.op_flags |= REQ_PREFLUSH | REQ_FUA;
+			io->fio.op_flags |= REQ_FUA;
 	}
 	__submit_merged_bio(io);
 	up_write(&io->io_rwsem);
@@ -992,7 +992,7 @@ struct page *f2fs_find_data_page(struct inode *inode, pgoff_t index, int flags)
 		return page;
 	f2fs_put_page(page, 0);
 
-	page = f2fs_get_read_data_page(inode, index, 0, flags);
+	page = get_read_data_page(inode, index, 0, false);
 	if (IS_ERR(page))
 		return page;
 
@@ -1019,7 +1019,7 @@ struct page *f2fs_get_lock_data_page(struct inode *inode, pgoff_t index,
 	struct page *page;
 	int flags = (for_write ? F2FS_GETPAGE_FOR_WRITE : 0);
 repeat:
-	page = f2fs_get_read_data_page(inode, index, 0, flags);
+	page = get_read_data_page(inode, index, 0, for_write);
 	if (IS_ERR(page))
 		return page;
 
