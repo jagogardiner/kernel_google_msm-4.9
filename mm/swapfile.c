@@ -2601,9 +2601,6 @@ SYSCALL_DEFINE2(swapon, const char __user *, specialfile, int, swap_flags)
 		}
 	}
 
-	if (p->bdev && blk_queue_fast(bdev_get_queue(p->bdev)))
-		p->flags |= SWP_FAST;
-
 	mutex_lock(&swapon_mutex);
 	prio = -1;
 	if (swap_flags & SWAP_FLAG_PREFER) {

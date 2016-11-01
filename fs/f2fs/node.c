@@ -1921,6 +1921,34 @@ int f2fs_wait_on_node_pages_writeback(struct f2fs_sb_info *sbi,
 	ret2 = filemap_check_errors(NODE_MAPPING(sbi));
 	if (!ret)
 		ret = ret2;
+	return ret;
+}
+
+static int f2fs_write_node_page(struct page *page,
+				struct writeback_control *wbc)
+{
+	struct f2fs_sb_info *sbi = F2FS_P_SB(page);
+	nid_t nid;
+	struct node_info ni;
+	struct f2fs_io_info fio = {
+		.sbi = sbi,
+		.type = NODE,
+		.op = REQ_OP_WRITE,
+		.op_flags = wbc_to_write_flags(wbc),
+		.page = page,
+		.encrypted_page = NULL,
+	};
+
+	trace_f2fs_writepage(page, NODE);
+
+	if (unlikely(is_sbi_flag_set(sbi, SBI_POR_DOING)))
+		goto redirty_out;
+	if (unlikely(f2fs_cp_error(sbi)))
+		goto redirty_out;
+
+	/* get old block addr of this node page */
+	nid = nid_of_node(page);
+	f2fs_bug_on(sbi, page->index != nid);
 
 	return ret;
 }

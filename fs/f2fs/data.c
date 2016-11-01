@@ -78,7 +78,6 @@ enum bio_post_read_step {
 	STEP_VERITY,
 };
 
-<<<<<<< HEAD
 struct bio_post_read_ctx {
 	struct bio *bio;
 	struct work_struct work;
@@ -97,12 +96,6 @@ static void __read_end_io(struct bio *bio)
 
 		/* PG_error was set if any post_read step failed */
 		if (bio->bi_error || PageError(page)) {
-=======
-		if (!bio->bi_status) {
-			if (!PageUptodate(page))
-				SetPageUptodate(page);
-		} else {
->>>>>>> 4e4cbee93d56... block: switch bios to blk_status_t
 			ClearPageUptodate(page);
 			/* will re-read again later */
 			ClearPageError(page);

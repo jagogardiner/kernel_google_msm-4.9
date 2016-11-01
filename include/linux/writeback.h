@@ -9,6 +9,7 @@
 #include <linux/fs.h>
 #include <linux/flex_proportions.h>
 #include <linux/backing-dev-defs.h>
+#include <linux/blk_types.h>
 
 DECLARE_PER_CPU(int, dirty_throttle_leaks);
 
@@ -99,6 +100,14 @@ struct writeback_control {
 	size_t wb_tcand_bytes;		/* bytes written by this candidate */
 #endif
 };
+
+static inline int wbc_to_write_flags(struct writeback_control *wbc)
+{
+	if (wbc->sync_mode == WB_SYNC_ALL)
+		return REQ_SYNC;
+
+	return 0;
+}
 
 /*
  * A wb_domain represents a domain that wb's (bdi_writeback's) belong to
