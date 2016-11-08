@@ -274,9 +274,19 @@ void rcu_bh_qs(void)
 
 static DEFINE_PER_CPU(int, rcu_sched_qs_mask);
 
+/*
+ * Steal a bit from the bottom of ->dynticks for idle entry/exit
+ * control.  Initially this is for TLB flushing.
+ */
+#define RCU_DYNTICK_CTRL_MASK 0x1
+#define RCU_DYNTICK_CTRL_CTR  (RCU_DYNTICK_CTRL_MASK + 1)
+#ifndef rcu_eqs_special_exit
+#define rcu_eqs_special_exit() do { } while (0)
+#endif
+
 static DEFINE_PER_CPU(struct rcu_dynticks, rcu_dynticks) = {
 	.dynticks_nesting = DYNTICK_TASK_EXIT_IDLE,
-	.dynticks = ATOMIC_INIT(1),
+	.dynticks = ATOMIC_INIT(RCU_DYNTICK_CTRL_CTR),
 #ifdef CONFIG_NO_HZ_FULL_SYSIDLE
 	.dynticks_idle_nesting = DYNTICK_TASK_NEST_VALUE,
 	.dynticks_idle = ATOMIC_INIT(1),
@@ -404,6 +414,28 @@ static void rcu_dynticks_momentary_idle(void)
 
 	/* It is illegal to call this from idle state. */
 	WARN_ON_ONCE(!(special & RCU_DYNTICK_CTRL_CTR));
+}
+
+/*
+ * Set the special (bottom) bit of the specified CPU so that it
+ * will take special action (such as flushing its TLB) on the
+ * next exit from an extended quiescent state.  Returns true if
+ * the bit was successfully set, or false if the CPU was not in
+ * an extended quiescent state.
+ */
+bool rcu_eqs_special_set(int cpu)
+{
+	int old;
+	int new;
+	struct rcu_dynticks *rdtp = &per_cpu(rcu_dynticks, cpu);
+
+	do {
+		old = atomic_read(&rdtp->dynticks);
+		if (old & RCU_DYNTICK_CTRL_CTR)
+			return false;
+		new = old | RCU_DYNTICK_CTRL_MASK;
+	} while (atomic_cmpxchg(&rdtp->dynticks, old, new) != old);
+	return true;
 }
 
 /*
@@ -1390,19 +1422,6 @@ static int rcu_implicit_dynticks_qs(struct rcu_data *rdp,
 	 * is set too high, we override with half of the RCU CPU stall
 	 * warning delay.
 	 */
-<<<<<<< HEAD
-	rcrmp = &per_cpu(rcu_sched_qs_mask, rdp->cpu);
-	if (ULONG_CMP_GE(jiffies,
-			 rdp->rsp->gp_start + jiffies_till_sched_qs) ||
-	    ULONG_CMP_GE(jiffies, rdp->rsp->jiffies_resched)) {
-		if (!(READ_ONCE(*rcrmp) & rdp->rsp->flavor_mask)) {
-			WRITE_ONCE(rdp->cond_resched_completed,
-				   READ_ONCE(rdp->mynode->completed));
-			smp_mb(); /* ->cond_resched_completed before *rcrmp. */
-			WRITE_ONCE(*rcrmp,
-				   READ_ONCE(*rcrmp) + rdp->rsp->flavor_mask);
-		}
-=======
 	rnhqp = &per_cpu(rcu_dynticks.rcu_need_heavy_qs, rdp->cpu);
 	if (!READ_ONCE(*rnhqp) &&
 	    (time_after(jiffies, rdp->rsp->gp_start + jtsq) ||
@@ -1410,7 +1429,6 @@ static int rcu_implicit_dynticks_qs(struct rcu_data *rdp,
 		WRITE_ONCE(*rnhqp, true);
 		/* Store rcu_need_heavy_qs before rcu_urgent_qs. */
 		smp_store_release(ruqp, true);
->>>>>>> 9226b10d78ff... rcu: Place guard on rcu_all_qs() and rcu_note_context_switch() actions
 		rdp->rsp->jiffies_resched += 5; /* Re-enable beating. */
 	}
 
