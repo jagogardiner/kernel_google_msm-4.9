@@ -248,7 +248,7 @@ struct rw_semaphore __sched *rwsem_down_read_failed(struct rw_semaphore *sem)
 {
 	long count, adjustment = -RWSEM_ACTIVE_READ_BIAS;
 	struct rwsem_waiter waiter;
-	WAKE_Q(wake_q);
+	DEFINE_WAKE_Q(wake_q);
 
 	waiter.task = current;
 	waiter.type = RWSEM_WAITING_FOR_READ;
@@ -484,8 +484,8 @@ __rwsem_down_write_failed_common(struct rw_semaphore *sem, int state)
 	bool waiting = true; /* any queued threads before us */
 	struct rwsem_waiter waiter;
 	struct rw_semaphore *ret = sem;
-	WAKE_Q(wake_q);
-        bool is_first_waiter = false;
+	DEFINE_WAKE_Q(wake_q);
+	bool is_first_waiter = false;
 
 	/* undo write bias from down_write operation, stop active locking */
 	count = atomic_long_sub_return(RWSEM_ACTIVE_WRITE_BIAS, &sem->count);
@@ -598,7 +598,7 @@ __visible
 struct rw_semaphore *rwsem_wake(struct rw_semaphore *sem)
 {
 	unsigned long flags;
-	WAKE_Q(wake_q);
+	DEFINE_WAKE_Q(wake_q);
 
 	/*
 	* __rwsem_down_write_failed_common(sem)
@@ -679,7 +679,7 @@ __visible
 struct rw_semaphore *rwsem_downgrade_wake(struct rw_semaphore *sem)
 {
 	unsigned long flags;
-	WAKE_Q(wake_q);
+	DEFINE_WAKE_Q(wake_q);
 
 	raw_spin_lock_irqsave(&sem->wait_lock, flags);
 
