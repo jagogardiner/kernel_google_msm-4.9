@@ -5410,6 +5410,7 @@ void init_idle(struct task_struct *idle, int cpu, bool cpu_up)
 
 	idle->state = TASK_RUNNING;
 	idle->se.exec_start = sched_clock();
+	idle->flags |= PF_WAKE_UP_IDLE;
 
 	kasan_unpoison_task_stack(idle);
 
