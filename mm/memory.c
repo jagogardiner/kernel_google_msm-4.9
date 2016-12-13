@@ -3540,11 +3540,7 @@ static int handle_pte_fault(struct vm_fault *vmf)
 		vmf->pte = NULL;
 	} else {
 		/* See comment in pte_alloc_one_map() */
-<<<<<<< HEAD
 		if (pmd_devmap_trans_unstable(fe->pmd))
-=======
-		if (pmd_trans_unstable(vmf->pmd) || pmd_devmap(*vmf->pmd))
->>>>>>> 82b0f8c39a38... mm: join struct fault_env and vm_fault
 			return 0;
 		/*
 		 * A regular pmd is established and it can't morph into a huge
