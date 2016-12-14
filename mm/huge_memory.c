@@ -570,7 +570,10 @@ static int __do_huge_pmd_anonymous_page(struct vm_fault *vmf, struct page *page,
 
 	vmf->ptl = pmd_lock(vma->vm_mm, vmf->pmd);
 	if (unlikely(!pmd_none(*vmf->pmd))) {
-		goto unlock_release;
+		spin_unlock(vmf->ptl);
+		mem_cgroup_cancel_charge(page, memcg, true);
+		put_page(page);
+		pte_free(vma->vm_mm, pgtable);
 	} else {
 		pmd_t entry;
 
@@ -689,10 +692,7 @@ int do_huge_pmd_anonymous_page(struct vm_fault *vmf)
 		ret = 0;
 		set = false;
 		if (pmd_none(*vmf->pmd)) {
-			ret = check_stable_address_space(vma->vm_mm);
-			if (ret) {
-				spin_unlock(vmf->ptl);
-			} else if (userfaultfd_missing(vma)) {
+			if (userfaultfd_missing(vma)) {
 				spin_unlock(vmf->ptl);
 				ret = handle_userfault(vmf, VM_UFFD_MISSING);
 				VM_BUG_ON(ret & VM_FAULT_FALLBACK);
