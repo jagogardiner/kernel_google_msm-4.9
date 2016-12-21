@@ -348,6 +348,49 @@ ww_mutex_set_context_slowpath(struct ww_mutex *lock,
 }
 
 #ifdef CONFIG_MUTEX_SPIN_ON_OWNER
+
+static inline
+bool ww_mutex_spin_on_owner(struct mutex *lock, struct ww_acquire_ctx *ww_ctx,
+			    struct mutex_waiter *waiter)
+{
+	struct ww_mutex *ww;
+
+	ww = container_of(lock, struct ww_mutex, base);
+
+	/*
+	 * If ww->ctx is set the contents are undefined, only
+	 * by acquiring wait_lock there is a guarantee that
+	 * they are not invalid when reading.
+	 *
+	 * As such, when deadlock detection needs to be
+	 * performed the optimistic spinning cannot be done.
+	 *
+	 * Check this in every inner iteration because we may
+	 * be racing against another thread's ww_mutex_lock.
+	 */
+	if (ww_ctx->acquired > 0 && READ_ONCE(ww->ctx))
+		return false;
+
+	/*
+	 * If we aren't on the wait list yet, cancel the spin
+	 * if there are waiters. We want  to avoid stealing the
+	 * lock from a waiter with an earlier stamp, since the
+	 * other thread may already own a lock that we also
+	 * need.
+	 */
+	if (!waiter && (atomic_long_read(&lock->owner) & MUTEX_FLAG_WAITERS))
+		return false;
+
+	/*
+	 * Similarly, stop spinning if we are no longer the
+	 * first waiter.
+	 */
+	if (waiter && !__mutex_waiter_is_first(lock, waiter))
+		return false;
+
+	return true;
+}
+
 /*
  * Look out! "owner" is an entirely speculative pointer access and not
  * reliable.
@@ -356,7 +399,7 @@ ww_mutex_set_context_slowpath(struct ww_mutex *lock,
  */
 static noinline
 bool mutex_spin_on_owner(struct mutex *lock, struct task_struct *owner,
-			 struct ww_acquire_ctx *ww_ctx)
+			 struct ww_acquire_ctx *ww_ctx, struct mutex_waiter *waiter)
 {
 	bool ret = true;
 
@@ -375,26 +418,9 @@ bool mutex_spin_on_owner(struct mutex *lock, struct task_struct *owner,
 			break;
 		}
 
-		if (ww_ctx && ww_ctx->acquired > 0) {
-			struct ww_mutex *ww;
-
-			ww = container_of(lock, struct ww_mutex, base);
-
-			/*
-			 * If ww->ctx is set the contents are undefined, only
-			 * by acquiring wait_lock there is a guarantee that
-			 * they are not invalid when reading.
-			 *
-			 * As such, when deadlock detection needs to be
-			 * performed the optimistic spinning cannot be done.
-			 *
-			 * Check this in every inner iteration because we may
-			 * be racing against another thread's ww_mutex_lock.
-			 */
-			if (READ_ONCE(ww->ctx)) {
-				ret = false;
-				break;
-			}
+		if (ww_ctx && !ww_mutex_spin_on_owner(lock, ww_ctx, waiter)) {
+			ret = false;
+			break;
 		}
 
 		cpu_relax_lowlatency();
@@ -445,8 +471,9 @@ static inline int mutex_can_spin_on_owner(struct mutex *lock)
  * Returns true when the lock was taken, otherwise false, indicating
  * that we need to jump to the slowpath and sleep.
  */
-static bool mutex_optimistic_spin(struct mutex *lock,
-				  struct ww_acquire_ctx *ww_ctx, const bool use_ww_ctx)
+static __always_inline bool
+mutex_optimistic_spin(struct mutex *lock, struct ww_acquire_ctx *ww_ctx,
+		      const bool use_ww_ctx, struct mutex_waiter *waiter)
 {
 	struct task_struct *task = current;
 
@@ -473,7 +500,7 @@ static bool mutex_optimistic_spin(struct mutex *lock,
 		 * If there's an owner, wait for it to either
 		 * release the lock or go to sleep.
 		 */
-		if (!mutex_spin_on_owner(lock, owner, ww_ctx))
+		if (!mutex_spin_on_owner(lock, owner, ww_ctx, waiter))
 			goto fail_unlock;
 
 		/*
@@ -515,8 +542,9 @@ done:
 	return false;
 }
 #else
-static bool mutex_optimistic_spin(struct mutex *lock,
-				  struct ww_acquire_ctx *ww_ctx, const bool use_ww_ctx)
+static __always_inline bool
+mutex_optimistic_spin(struct mutex *lock, struct ww_acquire_ctx *ww_ctx,
+		      const bool use_ww_ctx, struct mutex_waiter *waiter)
 {
 	return false;
 }
@@ -618,8 +646,8 @@ __mutex_lock_common(struct mutex *lock, long state, unsigned int subclass,
 	preempt_disable();
 	mutex_acquire_nest(&lock->dep_map, subclass, 0, nest_lock, ip);
 
-	if (__mutex_trylock(lock, false) ||
-	    mutex_optimistic_spin(lock, ww_ctx, use_ww_ctx)) {
+	if (__mutex_trylock(lock) ||
+	    mutex_optimistic_spin(lock, ww_ctx, use_ww_ctx, NULL)) {
 		/* got the lock, yay! */
 		lock_acquired(&lock->dep_map, ip);
 		if (use_ww_ctx) {
@@ -688,8 +716,8 @@ __mutex_lock_common(struct mutex *lock, long state, unsigned int subclass,
 		 * state back to RUNNING and fall through the next schedule(),
 		 * or we must see its unlock and acquire.
 		 */
-		if ((first && mutex_optimistic_spin(lock, ww_ctx, use_ww_ctx, true)) ||
-		     __mutex_trylock(lock, first))
+		if (__mutex_trylock(lock) ||
+		    (first && mutex_optimistic_spin(lock, ww_ctx, use_ww_ctx, &waiter)))
 			break;
 
 		spin_lock_mutex(&lock->wait_lock, flags);
