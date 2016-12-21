@@ -349,11 +349,14 @@ ww_mutex_set_context_slowpath(struct ww_mutex *lock,
 
 #ifdef CONFIG_MUTEX_SPIN_ON_OWNER
 /*
- * Look out! "owner" is an entirely speculative pointer
- * access and not reliable.
+ * Look out! "owner" is an entirely speculative pointer access and not
+ * reliable.
+ *
+ * "noinline" so that this function shows up on perf profiles.
  */
 static noinline
-bool mutex_spin_on_owner(struct mutex *lock, struct task_struct *owner)
+bool mutex_spin_on_owner(struct mutex *lock, struct task_struct *owner,
+			 struct ww_acquire_ctx *ww_ctx)
 {
 	bool ret = true;
 
@@ -370,6 +373,28 @@ bool mutex_spin_on_owner(struct mutex *lock, struct task_struct *owner)
 		if (!owner->on_cpu || need_resched()) {
 			ret = false;
 			break;
+		}
+
+		if (ww_ctx && ww_ctx->acquired > 0) {
+			struct ww_mutex *ww;
+
+			ww = container_of(lock, struct ww_mutex, base);
+
+			/*
+			 * If ww->ctx is set the contents are undefined, only
+			 * by acquiring wait_lock there is a guarantee that
+			 * they are not invalid when reading.
+			 *
+			 * As such, when deadlock detection needs to be
+			 * performed the optimistic spinning cannot be done.
+			 *
+			 * Check this in every inner iteration because we may
+			 * be racing against another thread's ww_mutex_lock.
+			 */
+			if (READ_ONCE(ww->ctx)) {
+				ret = false;
+				break;
+			}
 		}
 
 		cpu_relax_lowlatency();
@@ -439,35 +464,17 @@ static bool mutex_optimistic_spin(struct mutex *lock,
 	while (true) {
 		struct task_struct *owner;
 
-		if (use_ww_ctx && ww_ctx->acquired > 0) {
-			struct ww_mutex *ww;
-
-			ww = container_of(lock, struct ww_mutex, base);
-			/*
-			 * If ww->ctx is set the contents are undefined, only
-			 * by acquiring wait_lock there is a guarantee that
-			 * they are not invalid when reading.
-			 *
-			 * As such, when deadlock detection needs to be
-			 * performed the optimistic spinning cannot be done.
-			 */
-			if (READ_ONCE(ww->ctx))
-				break;
-		}
+		/* Try to acquire the mutex... */
+		owner = __mutex_trylock_or_owner(lock);
+		if (!owner)
+			break;
 
 		/*
 		 * If there's an owner, wait for it to either
 		 * release the lock or go to sleep.
 		 */
-		owner = __mutex_owner(lock);
-		if (owner && !mutex_spin_on_owner(lock, owner))
-			break;
-
-		/* Try to acquire the mutex if it is unlocked. */
-		if (__mutex_trylock(lock, false)) {
-			osq_unlock(&lock->osq);
-			return true;
-		}
+		if (!mutex_spin_on_owner(lock, owner, ww_ctx))
+			goto fail_unlock;
 
 		/*
 		 * The cpu_relax() call is a compiler barrier which forces
