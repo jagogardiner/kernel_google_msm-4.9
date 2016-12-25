@@ -9,9 +9,8 @@
 struct inode;
 struct mm_struct;
 struct task_struct;
-union ktime;
 
-long do_futex(u32 __user *uaddr, int op, u32 val, union ktime *timeout,
+long do_futex(u32 __user *uaddr, int op, u32 val, ktime_t *timeout,
 	      u32 __user *uaddr2, u32 val2, u32 val3);
 
 extern int

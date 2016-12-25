@@ -787,7 +787,6 @@ static void __blk_mq_run_hw_queue(struct blk_mq_hw_ctx *hctx)
 	clear_bit_unlock(BLK_MQ_S_TAG_WAITING, &hctx->state);
 	blk_mq_run_hw_queue(hctx, true);
 	return 1;
-}
 
 	hctx->run++;
 

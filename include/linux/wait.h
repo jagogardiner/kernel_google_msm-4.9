@@ -482,28 +482,29 @@ do {										\
 	__ret;									\
 })
 
-#define __wait_event_hrtimeout(wq_head, condition, timeout, state)		\
-({										\
-	int __ret = 0;								\
-	struct hrtimer_sleeper __t;						\
-										\
-	hrtimer_init_on_stack(&__t.timer, CLOCK_MONOTONIC, HRTIMER_MODE_REL);	\
-	hrtimer_init_sleeper(&__t, current);					\
-	if ((timeout) != KTIME_MAX)						\
-		hrtimer_start_range_ns(&__t.timer, timeout,			\
-				       current->timer_slack_ns,			\
-				       HRTIMER_MODE_REL);			\
-										\
-	__ret = ___wait_event(wq_head, condition, state, 0, 0,			\
-		if (!__t.task) {						\
-			__ret = -ETIME;						\
-			break;							\
-		}								\
-		schedule());							\
-										\
-	hrtimer_cancel(&__t.timer);						\
-	destroy_hrtimer_on_stack(&__t.timer);					\
-	__ret;									\
+#define __wait_event_hrtimeout(wq, condition, timeout, state)		\
+({									\
+	int __ret = 0;							\
+	struct hrtimer_sleeper __t;					\
+									\
+	hrtimer_init_on_stack(&__t.timer, CLOCK_MONOTONIC,		\
+			      HRTIMER_MODE_REL);			\
+	hrtimer_init_sleeper(&__t, current);				\
+	if ((timeout) != KTIME_MAX)				\
+		hrtimer_start_range_ns(&__t.timer, timeout,		\
+				       current->timer_slack_ns,		\
+				       HRTIMER_MODE_REL);		\
+									\
+	__ret = ___wait_event(wq, condition, state, 0, 0,		\
+		if (!__t.task) {					\
+			__ret = -ETIME;					\
+			break;						\
+		}							\
+		schedule());						\
+									\
+	hrtimer_cancel(&__t.timer);					\
+	destroy_hrtimer_on_stack(&__t.timer);				\
+	__ret;								\
 })
 
 /**
