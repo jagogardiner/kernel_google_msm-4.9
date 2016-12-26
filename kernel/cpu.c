@@ -1782,7 +1782,7 @@ int __cpuhp_setup_state(enum cpuhp_state state,
 			bool multi_instance)
 {
 	int cpu, ret = 0;
-	int dyn_state = 0;
+	bool dynstate;
 
 	if (cpuhp_cb_check(state) || !name)
 		return -EINVAL;
@@ -1790,18 +1790,15 @@ int __cpuhp_setup_state(enum cpuhp_state state,
 	cpus_read_lock();
 	mutex_lock(&cpuhp_state_mutex);
 
-	/* currently assignments for the ONLINE state are possible */
-	if (state == CPUHP_AP_ONLINE_DYN) {
-		dyn_state = 1;
-		ret = cpuhp_reserve_state(state);
-		if (ret < 0)
-			goto out;
-		state = ret;
-	}
-
 	cpuhp_store_callbacks(state, name, startup, teardown, multi_instance);
 
-	if (!invoke || !startup)
+	dynstate = state == CPUHP_AP_ONLINE_DYN;
+	if (ret > 0 && dynstate) {
+		state = ret;
+		ret = 0;
+	}
+
+	if (ret || !invoke || !startup)
 		goto out;
 
 	/*
