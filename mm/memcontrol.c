@@ -2037,7 +2037,7 @@ retry:
 	if (nr_retries--)
 		goto retry;
 
-	if (gfp_mask & __GFP_RETRY_MAYFAIL && oomed)
+	if (gfp_mask & __GFP_REPEAT && oomed)
 		goto nomem;
 
 	if (gfp_mask & __GFP_NOFAIL)

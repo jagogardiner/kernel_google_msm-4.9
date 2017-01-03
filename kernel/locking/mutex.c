@@ -520,7 +520,6 @@ __mutex_lock_common(struct mutex *lock, long state, unsigned int subclass,
 		    struct lockdep_map *nest_lock, unsigned long ip,
 		    struct ww_acquire_ctx *ww_ctx, const bool use_ww_ctx)
 {
-	struct task_struct *task = current;
 	struct mutex_waiter waiter;
 	unsigned long flags;
 	int ret;
@@ -551,15 +550,15 @@ __mutex_lock_common(struct mutex *lock, long state, unsigned int subclass,
 		goto skip_wait;
 
 	debug_mutex_lock_common(lock, &waiter);
-	debug_mutex_add_waiter(lock, &waiter, task);
+	debug_mutex_add_waiter(lock, &waiter, current);
 
 	/* add waiting tasks to the end of the waitqueue (FIFO): */
 	list_add_tail(&waiter.list, &lock->wait_list);
-	waiter.task = task;
+	waiter.task = current;
 
 	lock_contended(&lock->dep_map, ip);
 
-	set_current_state(state);
+	set_task_state(current, state);
 	for (;;) {
 		/*
 		 * Lets try to take the lock again - this is needed even if
@@ -579,7 +578,7 @@ __mutex_lock_common(struct mutex *lock, long state, unsigned int subclass,
 		 * got a signal? (This code gets eliminated in the
 		 * TASK_UNINTERRUPTIBLE case.)
 		 */
-		if (unlikely(signal_pending_state(state, task))) {
+		if (unlikely(signal_pending_state(state, current))) {
 			ret = -EINTR;
 			goto err;
 		}
@@ -590,7 +589,7 @@ __mutex_lock_common(struct mutex *lock, long state, unsigned int subclass,
 				goto err;
 		}
 
-		__set_task_state(task, state);
+		set_task_state(current, state);
 
 		/* didn't get the lock, go to sleep: */
 		spin_unlock_mutex(&lock->wait_lock, flags);
@@ -601,7 +600,7 @@ __mutex_lock_common(struct mutex *lock, long state, unsigned int subclass,
 			__mutex_set_flag(lock, MUTEX_FLAG_HANDOFF);
 		}
 
-		set_current_state(state);
+		set_task_state(current, state);
 		/*
 		 * Here we order against unlock; we must either see it change
 		 * state back to RUNNING and fall through the next schedule(),
@@ -615,10 +614,9 @@ __mutex_lock_common(struct mutex *lock, long state, unsigned int subclass,
 	}
 	spin_lock_mutex(&lock->wait_lock, flags);
 acquired:
-	__set_current_state(TASK_RUNNING);
+	__set_task_state(current, TASK_RUNNING);
 
-	mutex_remove_waiter(lock, &waiter, task);
-	/* set it to 0 if there are no waiters left: */
+	mutex_remove_waiter(lock, &waiter, current);
 	if (likely(list_empty(&lock->wait_list)))
 		atomic_set(&lock->count, 0);
 	debug_mutex_free_waiter(&waiter);
@@ -638,7 +636,7 @@ skip_wait:
 	return 0;
 
 err:
-	__set_current_state(TASK_RUNNING);
+	__set_task_state(current, TASK_RUNNING);
 	mutex_remove_waiter(lock, &waiter, current);
 	spin_unlock_mutex(&lock->wait_lock, flags);
 	debug_mutex_free_waiter(&waiter);
