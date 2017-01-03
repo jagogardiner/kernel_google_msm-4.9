@@ -559,6 +559,7 @@ __mutex_lock_common(struct mutex *lock, long state, unsigned int subclass,
 
 	lock_contended(&lock->dep_map, ip);
 
+	set_current_state(state);
 	for (;;) {
 		/*
 		 * Lets try to take the lock again - this is needed even if
@@ -594,9 +595,27 @@ __mutex_lock_common(struct mutex *lock, long state, unsigned int subclass,
 		/* didn't get the lock, go to sleep: */
 		spin_unlock_mutex(&lock->wait_lock, flags);
 		schedule_preempt_disabled();
+
+		if (!first && __mutex_waiter_is_first(lock, &waiter)) {
+			first = true;
+			__mutex_set_flag(lock, MUTEX_FLAG_HANDOFF);
+		}
+
+		set_current_state(state);
+		/*
+		 * Here we order against unlock; we must either see it change
+		 * state back to RUNNING and fall through the next schedule(),
+		 * or we must see its unlock and acquire.
+		 */
+		if ((first && mutex_optimistic_spin(lock, ww_ctx, use_ww_ctx, true)) ||
+		     __mutex_trylock(lock, first))
+			break;
+
 		spin_lock_mutex(&lock->wait_lock, flags);
 	}
-	__set_task_state(task, TASK_RUNNING);
+	spin_lock_mutex(&lock->wait_lock, flags);
+acquired:
+	__set_current_state(TASK_RUNNING);
 
 	mutex_remove_waiter(lock, &waiter, task);
 	/* set it to 0 if there are no waiters left: */
@@ -619,7 +638,8 @@ skip_wait:
 	return 0;
 
 err:
-	mutex_remove_waiter(lock, &waiter, task);
+	__set_current_state(TASK_RUNNING);
+	mutex_remove_waiter(lock, &waiter, current);
 	spin_unlock_mutex(&lock->wait_lock, flags);
 	debug_mutex_free_waiter(&waiter);
 	mutex_release(&lock->dep_map, 1, ip);
