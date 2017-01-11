@@ -881,12 +881,6 @@ static int f2fs_readdir(struct file *file, struct dir_context *ctx)
 	}
 
 	for (; n < npages; n++, ctx->pos = n * NR_DENTRY_IN_BLOCK) {
-
-		/* allow readdir() to be interrupted */
-		if (fatal_signal_pending(current)) {
-			err = -ERESTARTSYS;
-			goto out_free;
-		}
 		cond_resched();
 
 		/* readahead for multi pages of dir */

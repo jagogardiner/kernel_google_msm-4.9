@@ -53,16 +53,17 @@ EXPORT_SYMBOL(__mutex_init);
 /*
  * @owner: contains: 'struct task_struct *' to the current lock owner,
  * NULL means not owned. Since task_struct pointers are aligned at
- * ARCH_MIN_TASKALIGN (which is at least sizeof(void *)), we have low
- * bits to store extra state.
+ * at least L1_CACHE_BYTES, we have low bits to store extra state.
  *
  * Bit0 indicates a non-empty waiter list; unlock must issue a wakeup.
  * Bit1 indicates unlock needs to hand the lock to the top-waiter
+ * Bit2 indicates handoff has been done and we're waiting for pickup.
  */
 #define MUTEX_FLAG_WAITERS	0x01
 #define MUTEX_FLAG_HANDOFF	0x02
+#define MUTEX_FLAG_PICKUP	0x04
 
-#define MUTEX_FLAGS		0x03
+#define MUTEX_FLAGS		0x07
 
 static inline struct task_struct *__owner_task(unsigned long owner)
 {
@@ -75,38 +76,29 @@ static inline unsigned long __owner_flags(unsigned long owner)
 }
 
 /*
- * Actual trylock that will work on any unlocked state.
- *
- * When setting the owner field, we must preserve the low flag bits.
- *
- * Be careful with @handoff, only set that in a wait-loop (where you set
- * HANDOFF) to avoid recursive lock attempts.
+ * Trylock variant that retuns the owning task on failure.
  */
-static inline bool __mutex_trylock(struct mutex *lock, const bool handoff)
+static inline struct task_struct *__mutex_trylock_or_owner(struct mutex *lock)
 {
 	unsigned long owner, curr = (unsigned long)current;
 
 	owner = atomic_long_read(&lock->owner);
 	for (;;) { /* must loop, can race against a flag */
 		unsigned long old, flags = __owner_flags(owner);
+		unsigned long task = owner & ~MUTEX_FLAGS;
 
-		if (__owner_task(owner)) {
-			if (handoff && unlikely(__owner_task(owner) == current)) {
-				/*
-				 * Provide ACQUIRE semantics for the lock-handoff.
-				 *
-				 * We cannot easily use load-acquire here, since
-				 * the actual load is a failed cmpxchg, which
-				 * doesn't imply any barriers.
-				 *
-				 * Also, this is a fairly unlikely scenario, and
-				 * this contains the cost.
-				 */
-				smp_mb(); /* ACQUIRE */
-				return true;
-			}
+		if (task) {
+			if (likely(task != curr))
+				break;
 
-			return false;
+			if (likely(!(flags & MUTEX_FLAG_PICKUP)))
+				break;
+
+			flags &= ~MUTEX_FLAG_PICKUP;
+		} else {
+#ifdef CONFIG_DEBUG_MUTEXES
+			DEBUG_LOCKS_WARN_ON(flags & MUTEX_FLAG_PICKUP);
+#endif
 		}
 
 		/*
@@ -114,15 +106,24 @@ static inline bool __mutex_trylock(struct mutex *lock, const bool handoff)
 		 * past the point where we acquire it. This would be possible
 		 * if we (accidentally) set the bit on an unlocked mutex.
 		 */
-		if (handoff)
-			flags &= ~MUTEX_FLAG_HANDOFF;
+		flags &= ~MUTEX_FLAG_HANDOFF;
 
 		old = atomic_long_cmpxchg_acquire(&lock->owner, owner, curr | flags);
 		if (old == owner)
-			return true;
+			return NULL;
 
 		owner = old;
 	}
+
+	return __owner_task(owner);
+}
+
+/*
+ * Actual trylock that will work on any unlocked state.
+ */
+static inline bool __mutex_trylock(struct mutex *lock)
+{
+	return !__mutex_trylock_or_owner(lock);
 }
 
 #ifndef CONFIG_DEBUG_LOCK_ALLOC
@@ -174,9 +175,9 @@ static inline bool __mutex_waiter_is_first(struct mutex *lock, struct mutex_wait
 
 /*
  * Give up ownership to a specific task, when @task = NULL, this is equivalent
- * to a regular unlock. Clears HANDOFF, preserves WAITERS. Provides RELEASE
- * semantics like a regular unlock, the __mutex_trylock() provides matching
- * ACQUIRE semantics for the handoff.
+ * to a regular unlock. Sets PICKUP on a handoff, clears HANDOF, preserves
+ * WAITERS. Provides RELEASE semantics like a regular unlock, the
+ * __mutex_trylock() provides a matching ACQUIRE semantics for the handoff.
  */
 static void __mutex_handoff(struct mutex *lock, struct task_struct *task)
 {
@@ -187,10 +188,13 @@ static void __mutex_handoff(struct mutex *lock, struct task_struct *task)
 
 #ifdef CONFIG_DEBUG_MUTEXES
 		DEBUG_LOCKS_WARN_ON(__owner_task(owner) != current);
+		DEBUG_LOCKS_WARN_ON(owner & MUTEX_FLAG_PICKUP);
 #endif
 
 		new = (owner & MUTEX_FLAG_WAITERS);
 		new |= (unsigned long)task;
+		if (task)
+			new |= MUTEX_FLAG_PICKUP;
 
 		old = atomic_long_cmpxchg_release(&lock->owner, owner, new);
 		if (old == owner)
@@ -473,10 +477,16 @@ static __always_inline bool
 mutex_optimistic_spin(struct mutex *lock, struct ww_acquire_ctx *ww_ctx,
 		      const bool use_ww_ctx, struct mutex_waiter *waiter)
 {
-	struct task_struct *task = current;
-
-	if (!mutex_can_spin_on_owner(lock))
-		goto done;
+	if (!waiter) {
+		/*
+		 * The purpose of the mutex_can_spin_on_owner() function is
+		 * to eliminate the overhead of osq_lock() and osq_unlock()
+		 * in case spinning isn't possible. As a waiter-spinner
+		 * is not going to take OSQ lock anyway, there is no need
+		 * to call mutex_can_spin_on_owner().
+		 */
+		if (!mutex_can_spin_on_owner(lock))
+			goto fail;
 
 	/*
 	 * In order to avoid a stampede of mutex spinners trying to
@@ -494,11 +504,16 @@ mutex_optimistic_spin(struct mutex *lock, struct ww_acquire_ctx *ww_ctx,
 		if (!owner)
 			break;
 
+		/* Try to acquire the mutex... */
+		owner = __mutex_trylock_or_owner(lock);
+		if (!owner)
+			break;
+
 		/*
-		 * If there's an owner, wait for it to either
+		 * There's an owner, wait for it to either
 		 * release the lock or go to sleep.
 		 */
-		if (!mutex_spin_on_owner(lock, owner, ww_ctx, waiter))
+		if (!mutex_spin_on_owner(lock, owner))
 			goto fail_unlock;
 
 		/*
@@ -645,7 +660,7 @@ __mutex_lock_common(struct mutex *lock, long state, unsigned int subclass,
 	mutex_acquire_nest(&lock->dep_map, subclass, 0, nest_lock, ip);
 
 	if (__mutex_trylock(lock) ||
-	    mutex_optimistic_spin(lock, ww_ctx, use_ww_ctx, NULL)) {
+	    mutex_optimistic_spin(lock, ww_ctx, use_ww_ctx, false)) {
 		/* got the lock, yay! */
 		lock_acquired(&lock->dep_map, ip);
 		if (use_ww_ctx) {
@@ -662,7 +677,7 @@ __mutex_lock_common(struct mutex *lock, long state, unsigned int subclass,
 	/*
 	 * After waiting to acquire the wait_lock, try again.
 	 */
-	if (__mutex_trylock(lock, false))
+	if (__mutex_trylock(lock))
 		goto skip_wait;
 
 	debug_mutex_lock_common(lock, &waiter);
@@ -679,8 +694,14 @@ __mutex_lock_common(struct mutex *lock, long state, unsigned int subclass,
 
 	set_current_state(state);
 	for (;;) {
-		if (__mutex_trylock(lock, first))
-			break;
+		/*
+		 * Once we hold wait_lock, we're serialized against
+		 * mutex_unlock() handing the lock off to us, do a trylock
+		 * before testing the error conditions to make sure we pick up
+		 * the handoff.
+		 */
+		if (__mutex_trylock(lock))
+			goto acquired;
 
 		/*
 		 * got a signal? (This code gets eliminated in the
@@ -886,6 +907,7 @@ static noinline void __sched __mutex_unlock_slowpath(struct mutex *lock, unsigne
 
 #ifdef CONFIG_DEBUG_MUTEXES
 		DEBUG_LOCKS_WARN_ON(__owner_task(owner) != current);
+		DEBUG_LOCKS_WARN_ON(owner & MUTEX_FLAG_PICKUP);
 #endif
 
 		if (owner & MUTEX_FLAG_HANDOFF)
@@ -1021,7 +1043,7 @@ __ww_mutex_lock_interruptible_slowpath(struct ww_mutex *lock,
  */
 int __sched mutex_trylock(struct mutex *lock)
 {
-	bool locked = __mutex_trylock(lock, false);
+	bool locked = __mutex_trylock(lock);
 
 	if (locked)
 		mutex_acquire(&lock->dep_map, 0, 1, _RET_IP_);
