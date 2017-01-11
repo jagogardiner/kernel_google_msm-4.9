@@ -3499,6 +3499,7 @@ __perform_reclaim(gfp_t gfp_mask, unsigned int order,
 	struct reclaim_state reclaim_state;
 	int progress;
 	unsigned long pflags;
+	unsigned int noreclaim_flag;
 
 	cond_resched();
 
