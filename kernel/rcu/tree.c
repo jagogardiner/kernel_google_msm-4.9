@@ -490,11 +490,13 @@ void rcu_note_context_switch(bool preempt)
 	trace_rcu_utilization(TPS("Start context switch"));
 	rcu_sched_qs();
 	rcu_preempt_note_context_switch();
-	if (unlikely(raw_cpu_read(rcu_sched_qs_mask)))
+	/* Load rcu_urgent_qs before other flags. */
+	if (!smp_load_acquire(this_cpu_ptr(&rcu_dynticks.rcu_urgent_qs)))
+		goto out;
+	this_cpu_write(rcu_dynticks.rcu_urgent_qs, false);
+	if (unlikely(raw_cpu_read(rcu_dynticks.rcu_need_heavy_qs)))
 		rcu_momentary_dyntick_idle();
 	this_cpu_inc(rcu_dynticks.rcu_qs_ctr);
-	if (!preempt)
-		rcu_note_voluntary_context_switch_lite(current);
 out:
 	trace_rcu_utilization(TPS("End context switch"));
 	barrier(); /* Avoid RCU read-side critical sections leaking up. */
@@ -518,29 +520,26 @@ void rcu_all_qs(void)
 {
 	unsigned long flags;
 
+	if (!raw_cpu_read(rcu_dynticks.rcu_urgent_qs))
+		return;
+	preempt_disable();
+	/* Load rcu_urgent_qs before other flags. */
+	if (!smp_load_acquire(this_cpu_ptr(&rcu_dynticks.rcu_urgent_qs))) {
+		preempt_enable();
+		return;
+	}
+	this_cpu_write(rcu_dynticks.rcu_urgent_qs, false);
 	barrier(); /* Avoid RCU read-side critical sections leaking down. */
 	if (unlikely(raw_cpu_read(rcu_sched_qs_mask))) {
 		local_irq_save(flags);
 		rcu_momentary_dyntick_idle();
 		local_irq_restore(flags);
 	}
-	if (unlikely(raw_cpu_read(rcu_sched_data.cpu_no_qs.b.exp))) {
-		/*
-		 * Yes, we just checked a per-CPU variable with preemption
-		 * enabled, so we might be migrated to some other CPU at
-		 * this point.  That is OK because in that case, the
-		 * migration will supply the needed quiescent state.
-		 * We might end up needlessly disabling preemption and
-		 * invoking rcu_sched_qs() on the destination CPU, but
-		 * the probability and cost are both quite low, so this
-		 * should not be a problem in practice.
-		 */
-		preempt_disable();
+	if (unlikely(raw_cpu_read(rcu_sched_data.cpu_no_qs.b.exp)))
 		rcu_sched_qs();
-		preempt_enable();
-	}
 	this_cpu_inc(rcu_dynticks.rcu_qs_ctr);
 	barrier(); /* Avoid RCU read-side critical sections leaking up. */
+	preempt_enable();
 }
 EXPORT_SYMBOL_GPL(rcu_all_qs);
 
@@ -1320,12 +1319,11 @@ static int dyntick_save_progress_counter(struct rcu_data *rdp,
 static int rcu_implicit_dynticks_qs(struct rcu_data *rdp,
 				    bool *isidle, unsigned long *maxj)
 {
-	unsigned int curr;
-	int *rcrmp;
-	unsigned int snap;
-
-	curr = (unsigned int)atomic_add_return(0, &rdp->dynticks->dynticks);
-	snap = (unsigned int)rdp->dynticks_snap;
+	unsigned long jtsq;
+	bool *rnhqp;
+	bool *ruqp;
+	unsigned long rjtsc;
+	struct rcu_node *rnp;
 
 	/*
 	 * If the CPU passed through or entered a dynticks idle phase with
@@ -1353,11 +1351,15 @@ static int rcu_implicit_dynticks_qs(struct rcu_data *rdp,
 	 * sections.
 	 */
 	rnp = rdp->mynode;
+	ruqp = per_cpu_ptr(&rcu_dynticks.rcu_urgent_qs, rdp->cpu);
 	if (time_after(jiffies, rdp->rsp->gp_start + jtsq) &&
 	    READ_ONCE(rdp->rcu_qs_ctr_snap) != per_cpu(rcu_dynticks.rcu_qs_ctr, rdp->cpu) &&
 	    READ_ONCE(rdp->gpnum) == rnp->gpnum && !rdp->gpwrap) {
 		trace_rcu_fqs(rdp->rsp->name, rdp->gpnum, rdp->cpu, TPS("rqc"));
 		return 1;
+	} else {
+		/* Load rcu_qs_ctr before store to rcu_urgent_qs. */
+		smp_store_release(ruqp, true);
 	}
 
 	/* Check for the CPU being offline. */
@@ -1388,6 +1390,7 @@ static int rcu_implicit_dynticks_qs(struct rcu_data *rdp,
 	 * is set too high, we override with half of the RCU CPU stall
 	 * warning delay.
 	 */
+<<<<<<< HEAD
 	rcrmp = &per_cpu(rcu_sched_qs_mask, rdp->cpu);
 	if (ULONG_CMP_GE(jiffies,
 			 rdp->rsp->gp_start + jiffies_till_sched_qs) ||
@@ -1399,6 +1402,15 @@ static int rcu_implicit_dynticks_qs(struct rcu_data *rdp,
 			WRITE_ONCE(*rcrmp,
 				   READ_ONCE(*rcrmp) + rdp->rsp->flavor_mask);
 		}
+=======
+	rnhqp = &per_cpu(rcu_dynticks.rcu_need_heavy_qs, rdp->cpu);
+	if (!READ_ONCE(*rnhqp) &&
+	    (time_after(jiffies, rdp->rsp->gp_start + jtsq) ||
+	     time_after(jiffies, rdp->rsp->jiffies_resched))) {
+		WRITE_ONCE(*rnhqp, true);
+		/* Store rcu_need_heavy_qs before rcu_urgent_qs. */
+		smp_store_release(ruqp, true);
+>>>>>>> 9226b10d78ff... rcu: Place guard on rcu_all_qs() and rcu_note_context_switch() actions
 		rdp->rsp->jiffies_resched += 5; /* Re-enable beating. */
 	}
 
