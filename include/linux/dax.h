@@ -8,7 +8,29 @@
 
 struct iomap_ops;
 
-/* We use lowest available exceptional entry bit for locking */
+int dax_read_lock(void);
+void dax_read_unlock(int id);
+struct dax_device *dax_get_by_host(const char *host);
+struct dax_device *alloc_dax(void *private, const char *host,
+		const struct dax_operations *ops);
+void put_dax(struct dax_device *dax_dev);
+bool dax_alive(struct dax_device *dax_dev);
+void kill_dax(struct dax_device *dax_dev);
+void *dax_get_private(struct dax_device *dax_dev);
+long dax_direct_access(struct dax_device *dax_dev, pgoff_t pgoff, long nr_pages,
+		void **kaddr, pfn_t *pfn);
+
+/*
+ * We use lowest available bit in exceptional entry for locking, one bit for
+ * the entry size (PMD) and two more to tell us if the entry is a huge zero
+ * page (HZP) or an empty entry that is just used for locking.  In total four
+ * special bits.
+ *
+ * If the PMD bit isn't set the entry has size PAGE_SIZE, and if the HZP and
+ * EMPTY bits aren't set the entry is a normal DAX entry with a filesystem
+ * block allocation.
+ */
+#define RADIX_DAX_SHIFT	(RADIX_TREE_EXCEPTIONAL_SHIFT + 4)
 #define RADIX_DAX_ENTRY_LOCK (1 << RADIX_TREE_EXCEPTIONAL_SHIFT)
 
 ssize_t iomap_dax_rw(struct kiocb *iocb, struct iov_iter *iter,
