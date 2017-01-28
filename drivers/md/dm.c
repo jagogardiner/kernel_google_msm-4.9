@@ -839,17 +839,6 @@ static void clone_endio(struct bio *bio)
 	struct mapped_device *md = tio->io->md;
 	dm_endio_fn endio = tio->ti->type->end_io;
 
-<<<<<<< HEAD
-	if (endio) {
-		r = endio(tio->ti, bio, error);
-		if (r < 0 || r == DM_ENDIO_REQUEUE)
-			/*
-			 * error and requeue request are handled
-			 * in dec_pending().
-			 */
-			error = r;
-		else if (r == DM_ENDIO_INCOMPLETE)
-=======
 	if (unlikely(error == BLK_STS_TARGET)) {
 		if (bio_op(bio) == REQ_OP_WRITE_SAME &&
 		    !bdev_get_queue(bio->bi_bdev)->limits.max_write_same_sectors)
@@ -868,7 +857,6 @@ static void clone_endio(struct bio *bio)
 		case DM_ENDIO_DONE:
 			break;
 		case DM_ENDIO_INCOMPLETE:
->>>>>>> 4e4cbee93d56... block: switch bios to blk_status_t
 			/* The target will handle the io */
 			return;
 		else if (r) {
@@ -958,7 +946,8 @@ static long dm_blk_direct_access(struct block_device *bdev, sector_t sector,
 		ret = ti->type->direct_access(ti, sector, kaddr, pfn, size);
 out:
 	dm_put_live_table(md, srcu_idx);
-	return min(ret, size);
+
+	return ret;
 }
 
 /*
@@ -1083,11 +1072,6 @@ static void __map_bio(struct dm_target_io *tio)
 				      tio->io->bio->bi_bdev->bd_dev, sector);
 
 		generic_make_request(clone);
-<<<<<<< HEAD
-	} else if (r < 0 || r == DM_MAPIO_REQUEUE) {
-		/* error the io and bail out, or requeue it if needed */
-		dec_pending(tio->io, r);
-=======
 		break;
 	case DM_MAPIO_KILL:
 		dec_pending(tio->io, BLK_STS_IOERR);
@@ -1095,7 +1079,6 @@ static void __map_bio(struct dm_target_io *tio)
 		break;
 	case DM_MAPIO_REQUEUE:
 		dec_pending(tio->io, BLK_STS_DM_REQUEUE);
->>>>>>> 4e4cbee93d56... block: switch bios to blk_status_t
 		free_tio(tio);
 	} else if (r != DM_MAPIO_SUBMITTED) {
 		DMWARN("unimplemented target map return value: %d", r);
@@ -2835,7 +2818,6 @@ static const struct block_device_operations dm_blk_dops = {
 	.open = dm_blk_open,
 	.release = dm_blk_close,
 	.ioctl = dm_blk_ioctl,
-	.direct_access = dm_blk_direct_access,
 	.getgeo = dm_blk_getgeo,
 	.pr_ops = &dm_pr_ops,
 	.owner = THIS_MODULE
