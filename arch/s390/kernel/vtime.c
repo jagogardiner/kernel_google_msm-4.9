@@ -115,7 +115,7 @@ static void account_system_index_scaled(struct task_struct *p,
 					enum cpu_usage_stat index)
 {
 	p->stimescaled += cputime_to_nsecs(scaled);
-	account_system_index_time(p, cputime_to_nsecs(cputime), index);
+	account_system_index_time(p, cputime, index);
 }
 
 /*
@@ -163,12 +163,20 @@ static int do_account_vtime(struct task_struct *tsk, int hardirq_offset)
 
 	/* Push account value */
 	if (user) {
+<<<<<<< HEAD
 		account_user_time(tsk, cputime_to_nsecs(user));
+=======
+		account_user_time(tsk, user);
+>>>>>>> 5613fda9a503... sched/cputime: Convert task/group cputime to nsecs
 		tsk->utimescaled += cputime_to_nsecs(scale_vtime(user));
 	}
 
 	if (guest) {
+<<<<<<< HEAD
 		account_guest_time(tsk, cputime_to_nsecs(guest));
+=======
+		account_guest_time(tsk, guest);
+>>>>>>> 5613fda9a503... sched/cputime: Convert task/group cputime to nsecs
 		tsk->utimescaled += cputime_to_nsecs(scale_vtime(guest));
 	}
 
