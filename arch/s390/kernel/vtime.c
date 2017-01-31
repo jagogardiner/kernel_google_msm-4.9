@@ -13,7 +13,6 @@
 #include <linux/types.h>
 #include <linux/time.h>
 
-#include <asm/cputime.h>
 #include <asm/vtimer.h>
 #include <asm/vtime.h>
 #include <asm/cpu_mf.h>
@@ -91,6 +90,34 @@ static void update_mt_scaling(void)
 	__this_cpu_write(mt_scaling_jiffies, jiffies_64);
 }
 
+static inline u64 update_tsk_timer(unsigned long *tsk_vtime, u64 new)
+{
+	u64 delta;
+
+	delta = new - *tsk_vtime;
+	*tsk_vtime = new;
+	return delta;
+}
+
+
+static inline u64 scale_vtime(u64 vtime)
+{
+	u64 mult = __this_cpu_read(mt_scaling_mult);
+	u64 div = __this_cpu_read(mt_scaling_div);
+
+	if (smp_cpu_mtid)
+		return vtime * mult / div;
+	return vtime;
+}
+
+static void account_system_index_scaled(struct task_struct *p,
+					cputime_t cputime, cputime_t scaled,
+					enum cpu_usage_stat index)
+{
+	p->stimescaled += cputime_to_nsecs(scaled);
+	account_system_index_time(p, cputime_to_nsecs(cputime), index);
+}
+
 /*
  * Update process times based on virtual cpu times stored by entry.S
  * to the lowcore fields user_timer, system_timer & steal_clock.
@@ -140,9 +167,10 @@ static int do_account_vtime(struct task_struct *tsk, int hardirq_offset)
 		tsk->utimescaled += cputime_to_nsecs(scale_vtime(user));
 	}
 
-	system = S390_lowcore.system_timer - ti->system_timer;
-	S390_lowcore.steal_timer -= system;
-	ti->system_timer = S390_lowcore.system_timer;
+	if (guest) {
+		account_guest_time(tsk, cputime_to_nsecs(guest));
+		tsk->utimescaled += cputime_to_nsecs(scale_vtime(guest));
+	}
 
 	user_scaled = user;
 	system_scaled = system;

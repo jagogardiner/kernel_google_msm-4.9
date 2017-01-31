@@ -72,23 +72,23 @@ void vtime_flush(struct task_struct *tsk)
 		account_user_time(tsk, cputime_to_nsecs(cycle_to_cputime(ti->utime)));
 
 	if (ti->gtime)
-		account_guest_time(tsk, cycle_to_cputime(ti->gtime));
+		account_guest_time(tsk, cputime_to_nsecs(cycle_to_cputime(ti->gtime)));
 
 	if (ti->idle_time)
 		account_idle_time(cputime_to_nsecs(cycle_to_cputime(ti->idle_time)));
 
 	if (ti->stime) {
-		delta = cycle_to_cputime(ti->stime);
+		delta = cputime_to_nsecs(cycle_to_cputime(ti->stime));
 		account_system_index_time(tsk, delta, CPUTIME_SYSTEM);
 	}
 
 	if (ti->hardirq_time) {
-		delta = cycle_to_cputime(ti->hardirq_time);
+		delta = cputime_to_nsecs(cycle_to_cputime(ti->hardirq_time));
 		account_system_index_time(tsk, delta, CPUTIME_IRQ);
 	}
 
 	if (ti->softirq_time) {
-		delta = cycle_to_cputime(ti->softirq_time);
+		delta = cputime_to_nsecs(cycle_to_cputime(ti->softirq_time));
 		account_system_index_time(tsk, delta, CPUTIME_SOFTIRQ);
 	}
 }
