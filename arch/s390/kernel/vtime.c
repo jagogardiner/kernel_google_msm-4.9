@@ -120,9 +120,25 @@ static int do_account_vtime(struct task_struct *tsk, int hardirq_offset)
 	    time_after64(jiffies_64, this_cpu_read(mt_scaling_jiffies)))
 		update_mt_scaling();
 
-	user = S390_lowcore.user_timer - ti->user_timer;
-	S390_lowcore.steal_timer -= user;
-	ti->user_timer = S390_lowcore.user_timer;
+	/* Calculate cputime delta */
+	user = update_tsk_timer(&tsk->thread.user_timer,
+				READ_ONCE(S390_lowcore.user_timer));
+	guest = update_tsk_timer(&tsk->thread.guest_timer,
+				 READ_ONCE(S390_lowcore.guest_timer));
+	system = update_tsk_timer(&tsk->thread.system_timer,
+				  READ_ONCE(S390_lowcore.system_timer));
+	hardirq = update_tsk_timer(&tsk->thread.hardirq_timer,
+				   READ_ONCE(S390_lowcore.hardirq_timer));
+	softirq = update_tsk_timer(&tsk->thread.softirq_timer,
+				   READ_ONCE(S390_lowcore.softirq_timer));
+	S390_lowcore.steal_timer +=
+		clock - user - guest - system - hardirq - softirq;
+
+	/* Push account value */
+	if (user) {
+		account_user_time(tsk, cputime_to_nsecs(user));
+		tsk->utimescaled += cputime_to_nsecs(scale_vtime(user));
+	}
 
 	system = S390_lowcore.system_timer - ti->system_timer;
 	S390_lowcore.steal_timer -= system;

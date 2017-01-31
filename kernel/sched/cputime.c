@@ -395,7 +395,7 @@ static void irqtime_account_process_tick(struct task_struct *p, int user_tick,
 	 * other time can exceed ticks occasionally.
 	 */
 	other = account_other_time(ULONG_MAX);
-	if (other >= cputime)
+	if (other >= old_cputime)
 		return;
 
 	cputime -= other;
@@ -406,15 +406,16 @@ static void irqtime_account_process_tick(struct task_struct *p, int user_tick,
 		 * So, we have to handle it separately here.
 		 * Also, p->stime needs to be updated for ksoftirqd.
 		 */
-		account_system_index_time(p, cputime, CPUTIME_SOFTIRQ);
+		account_system_index_time(p, old_cputime, CPUTIME_SOFTIRQ);
 	} else if (user_tick) {
 		account_user_time(p, cputime);
 	} else if (p == rq->idle) {
-		account_idle_time(cputime);
+		account_idle_time(old_cputime);
 	} else if (p->flags & PF_VCPU) { /* System time or guest time */
-		account_guest_time(p, cputime);
+
+		account_guest_time(p, old_cputime);
 	} else {
-		account_system_index_time(p, cputime, CPUTIME_SYSTEM);
+		account_system_index_time(p, old_cputime, CPUTIME_SYSTEM);
 	}
 }
 
@@ -509,17 +510,18 @@ void account_process_tick(struct task_struct *p, int user_tick)
 	cputime = TICK_NSEC;
 	steal = steal_account_process_time(ULONG_MAX);
 
-	if (steal >= cputime)
+	if (steal >= old_cputime)
 		return;
 
-	cputime -= steal;
+	old_cputime -= steal;
+	cputime = cputime_to_nsecs(old_cputime);
 
 	if (user_tick)
 		account_user_time(p, cputime);
 	else if ((p != rq->idle) || (irq_count() != HARDIRQ_OFFSET))
-		account_system_time(p, HARDIRQ_OFFSET, cputime);
+		account_system_time(p, HARDIRQ_OFFSET, old_cputime);
 	else
-		account_idle_time(cputime);
+		account_idle_time(old_cputime);
 }
 
 /*

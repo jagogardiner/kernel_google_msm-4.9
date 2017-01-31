@@ -68,10 +68,28 @@ void vtime_flush(struct task_struct *tsk)
 	cputime_t delta_utime;
 	struct thread_info *ti = task_thread_info(tsk);
 
-	if (ti->ac_utime) {
-		delta_utime = cycle_to_cputime(ti->ac_utime);
-		account_user_time(tsk, delta_utime, delta_utime);
-		ti->ac_utime = 0;
+	if (ti->utime)
+		account_user_time(tsk, cputime_to_nsecs(cycle_to_cputime(ti->utime)));
+
+	if (ti->gtime)
+		account_guest_time(tsk, cycle_to_cputime(ti->gtime));
+
+	if (ti->idle_time)
+		account_idle_time(cycle_to_cputime(ti->idle_time));
+
+	if (ti->stime) {
+		delta = cycle_to_cputime(ti->stime);
+		account_system_index_time(tsk, delta, CPUTIME_SYSTEM);
+	}
+
+	if (ti->hardirq_time) {
+		delta = cycle_to_cputime(ti->hardirq_time);
+		account_system_index_time(tsk, delta, CPUTIME_IRQ);
+	}
+
+	if (ti->softirq_time) {
+		delta = cycle_to_cputime(ti->softirq_time);
+		account_system_index_time(tsk, delta, CPUTIME_SOFTIRQ);
 	}
 }
 

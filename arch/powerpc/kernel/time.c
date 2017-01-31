@@ -388,10 +388,35 @@ void vtime_flush(struct task_struct *tsk)
 	cputime_t utime, utimescaled;
 	struct cpu_accounting_data *acct = get_accounting(tsk);
 
-	utime = acct->user_time;
-	utimescaled = acct->user_time_scaled;
-	acct->user_time = 0;
-	acct->user_time_scaled = 0;
+	if (acct->utime)
+		account_user_time(tsk, cputime_to_nsecs(acct->utime));
+
+	if (acct->utime_scaled)
+		tsk->utimescaled += cputime_to_nsecs(acct->utime_scaled);
+
+	if (acct->gtime)
+		account_guest_time(tsk, acct->gtime);
+
+	if (acct->steal_time)
+		account_steal_time(acct->steal_time);
+
+	if (acct->idle_time)
+		account_idle_time(acct->idle_time);
+
+	if (acct->stime)
+		account_system_index_time(tsk, acct->stime, CPUTIME_SYSTEM);
+
+	if (acct->stime_scaled)
+		tsk->stimescaled += cputime_to_nsecs(acct->stime_scaled);
+
+	if (acct->hardirq_time)
+		account_system_index_time(tsk, acct->hardirq_time, CPUTIME_IRQ);
+
+	if (acct->softirq_time)
+		account_system_index_time(tsk, acct->softirq_time, CPUTIME_SOFTIRQ);
+
+	acct->utime = 0;
+	acct->utime_scaled = 0;
 	acct->utime_sspurr = 0;
 	account_user_time(tsk, utime, utimescaled);
 }
