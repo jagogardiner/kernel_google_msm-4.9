@@ -583,8 +583,8 @@ static int do_task_stat(struct seq_file *m, struct pid_namespace *ns,
 	seq_put_decimal_ull(m, " ", task->rt_priority);
 	seq_put_decimal_ull(m, " ", task->policy);
 	seq_put_decimal_ull(m, " ", delayacct_blkio_ticks(task));
-	seq_put_decimal_ull(m, " ", cputime_to_clock_t(gtime));
-	seq_put_decimal_ll(m, " ", cputime_to_clock_t(cgtime));
+	seq_put_decimal_ull(m, " ", nsec_to_clock_t(gtime));
+	seq_put_decimal_ll(m, " ", nsec_to_clock_t(cgtime));
 
 	if (mm && permitted) {
 		seq_put_decimal_ull(m, " ", mm->start_data);
