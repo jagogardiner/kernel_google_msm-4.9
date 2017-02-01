@@ -245,12 +245,9 @@ static inline bool cpus_share_cache(int this_cpu, int that_cpu)
 
 #endif	/* !CONFIG_SMP */
 
-<<<<<<< HEAD
 static inline int task_node(const struct task_struct *p)
 {
 	return cpu_to_node(task_cpu(p));
 }
 
-=======
->>>>>>> a60b9eda67be... sched/headers: Move scheduler topology interfaces to <linux/sched/topology.h>
 #endif /* _LINUX_SCHED_TOPOLOGY_H */
