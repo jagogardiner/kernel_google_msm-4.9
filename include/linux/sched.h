@@ -1461,56 +1461,7 @@ static inline pid_t task_pgrp_nr_ns(struct task_struct *tsk, struct pid_namespac
 	return __task_pid_nr_ns(tsk, PIDTYPE_PGID, ns);
 }
 
-<<<<<<< HEAD
 static inline pid_t task_pgrp_vnr(struct task_struct *tsk)
-=======
-#ifdef CONFIG_HOTPLUG_CPU
-extern void idle_task_exit(void);
-#else
-static inline void idle_task_exit(void) {}
-#endif
-
-#if defined(CONFIG_NO_HZ_COMMON) && defined(CONFIG_SMP)
-extern void wake_up_nohz_cpu(int cpu);
-#else
-static inline void wake_up_nohz_cpu(int cpu) { }
-#endif
-
-#ifdef CONFIG_NO_HZ_FULL
-extern u64 scheduler_tick_max_deferment(void);
-#endif
-
-extern int yield_to(struct task_struct *p, bool preempt);
-extern void set_user_nice(struct task_struct *p, long nice);
-extern int task_prio(const struct task_struct *p);
-/**
- * task_nice - return the nice value of a given task.
- * @p: the task in question.
- *
- * Return: The nice value [ -20 ... 0 ... 19 ].
- */
-static inline int task_nice(const struct task_struct *p)
-{
-	return PRIO_TO_NICE((p)->static_prio);
-}
-extern int can_nice(const struct task_struct *p, const int nice);
-extern int task_curr(const struct task_struct *p);
-extern int idle_cpu(int cpu);
-extern int sched_setscheduler(struct task_struct *, int,
-			      const struct sched_param *);
-extern int sched_setscheduler_nocheck(struct task_struct *, int,
-				      const struct sched_param *);
-extern int sched_setattr(struct task_struct *,
-			 const struct sched_attr *);
-extern struct task_struct *idle_task(int cpu);
-/**
- * is_idle_task - is the specified task an idle task?
- * @p: the task in question.
- *
- * Return: 1 if @p is an idle task. 0 otherwise.
- */
-static inline bool is_idle_task(const struct task_struct *p)
->>>>>>> de8f1c77313d... sched/headers: Move autogroup APIs into <linux/sched/autogroup.h>
 {
 	return __task_pid_nr_ns(tsk, PIDTYPE_PGID, NULL);
 }

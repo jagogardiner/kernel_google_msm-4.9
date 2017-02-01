@@ -24,6 +24,8 @@
  */
 
 #include <linux/module.h>
+#include <linux/extable.h>
+#include <linux/sched/mm.h>
 #include <linux/sched/signal.h>
 #include <linux/sched/debug.h>
 #include <linux/mm_types.h>
