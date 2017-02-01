@@ -23,11 +23,26 @@
 #include <linux/rcupdate.h>
 #include <linux/resource.h>
 #include <linux/latencytop.h>
+<<<<<<< HEAD
 #include <linux/sched/prio.h>
 #include <linux/signal_types.h>
 #include <linux/mm_types_task.h>
 #include <linux/mm_event.h>
 #include <linux/task_io_accounting.h>
+=======
+#include <linux/cred.h>
+#include <linux/llist.h>
+#include <linux/uidgid.h>
+#include <linux/gfp.h>
+#include <linux/topology.h>
+#include <linux/magic.h>
+#include <linux/cgroup-defs.h>
+
+#include <asm/processor.h>
+
+struct sched_attr;
+struct sched_param;
+>>>>>>> e2d1e2aec572... sched/headers: Move various ABI definitions to <uapi/linux/sched/types.h>
 
 /* task_struct member predeclarations (sorted alphabetically): */
 struct audit_context;
