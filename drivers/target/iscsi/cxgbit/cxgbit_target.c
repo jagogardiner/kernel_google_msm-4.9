@@ -8,6 +8,8 @@
 
 #include <linux/workqueue.h>
 #include <linux/kthread.h>
+#include <linux/sched/signal.h>
+
 #include <asm/unaligned.h>
 #include <target/target_core_base.h>
 #include <target/target_core_fabric.h>

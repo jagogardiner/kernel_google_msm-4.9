@@ -22,6 +22,7 @@
 #include <linux/delay.h>
 #include <linux/timer.h>
 #include <linux/kernel_stat.h>
+#include <linux/sched/signal.h>
 
 #include <asm/ccwdev.h>
 #include <asm/cio.h>

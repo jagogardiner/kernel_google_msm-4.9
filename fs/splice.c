@@ -32,6 +32,8 @@
 #include <linux/gfp.h>
 #include <linux/socket.h>
 #include <linux/compat.h>
+#include <linux/sched/signal.h>
+
 #include "internal.h"
 
 /*
