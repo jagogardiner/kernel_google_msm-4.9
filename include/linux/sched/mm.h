@@ -255,4 +255,25 @@ static inline void membarrier_execve(struct task_struct *t)
 }
 #endif
 
+#ifdef CONFIG_MEMCG
+extern void mm_update_next_owner(struct mm_struct *mm);
+#else
+static inline void mm_update_next_owner(struct mm_struct *mm)
+{
+}
+#endif /* CONFIG_MEMCG */
+
+#ifdef CONFIG_MMU
+extern void arch_pick_mmap_layout(struct mm_struct *mm);
+extern unsigned long
+arch_get_unmapped_area(struct file *, unsigned long, unsigned long,
+		       unsigned long, unsigned long);
+extern unsigned long
+arch_get_unmapped_area_topdown(struct file *filp, unsigned long addr,
+			  unsigned long len, unsigned long pgoff,
+			  unsigned long flags);
+#else
+static inline void arch_pick_mmap_layout(struct mm_struct *mm) {}
+#endif
+
 #endif /* _LINUX_SCHED_MM_H */
