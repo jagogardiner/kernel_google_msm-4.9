@@ -1671,8 +1671,12 @@ TASK_PFA_SET(SPEC_IB_FORCE_DISABLE, spec_ib_force_disable)
 TASK_PFA_TEST(LMK_WAITING, lmk_waiting)
 TASK_PFA_SET(LMK_WAITING, lmk_waiting)
 
+<<<<<<< HEAD
 static inline void
 current_restore_flags(unsigned long orig_flags, unsigned long flags)
+=======
+static inline void rcu_copy_process(struct task_struct *p)
+>>>>>>> c41cfc6c5ba4... sched/headers: Move the JOBCTL_ defines and methods from <linux/sched.h> to <linux/sched/jobctl.h>
 {
 	current->flags &= ~flags;
 	current->flags |= orig_flags & flags;
