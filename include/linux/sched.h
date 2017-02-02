@@ -1985,7 +1985,6 @@ static inline int sched_set_wake_up_idle(struct task_struct *p,
 	return 0;
 }
 
-<<<<<<< HEAD
 static inline void set_wake_up_idle(bool enabled)
 {
 	if (enabled)
@@ -1993,10 +1992,5 @@ static inline void set_wake_up_idle(bool enabled)
 	else
 		current->flags &= ~PF_WAKE_UP_IDLE;
 }
-=======
-#ifndef TASK_SIZE_OF
-#define TASK_SIZE_OF(tsk)	TASK_SIZE
-#endif
->>>>>>> 4240c8bf877f... sched/headers: Move more mm_struct related functionality from <linux/sched.h> to <linux/sched/mm.h>
 
 #endif
