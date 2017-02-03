@@ -109,7 +109,6 @@ static inline unsigned long stack_not_used(struct task_struct *p)
 #endif
 extern void set_task_stack_end_magic(struct task_struct *tsk);
 
-<<<<<<< HEAD
 #ifndef __HAVE_ARCH_KSTACK_END
 static inline int kstack_end(void *addr)
 {
@@ -120,6 +119,4 @@ static inline int kstack_end(void *addr)
 }
 #endif
 
-=======
->>>>>>> f3ac60671954... sched/headers: Move task-stack related APIs from <linux/sched.h> to <linux/sched/task_stack.h>
 #endif /* _LINUX_SCHED_TASK_STACK_H */

@@ -1752,18 +1752,6 @@ union thread_union {
 
 #ifdef CONFIG_THREAD_INFO_IN_TASK
 static inline struct thread_info *task_thread_info(struct task_struct *task)
-<<<<<<< HEAD
-=======
-{
-	return &task->thread_info;
-}
-#elif !defined(__HAVE_THREAD_FUNCTIONS)
-# define task_thread_info(task)	((struct thread_info *)(task)->stack)
-#endif
-
-#ifndef __HAVE_ARCH_KSTACK_END
-static inline int kstack_end(void *addr)
->>>>>>> f3ac60671954... sched/headers: Move task-stack related APIs from <linux/sched.h> to <linux/sched/task_stack.h>
 {
 	return &task->thread_info;
 }
@@ -1973,6 +1961,12 @@ static inline void set_task_cpu(struct task_struct *p, unsigned int cpu)
 extern long sched_setaffinity(pid_t pid, const struct cpumask *new_mask);
 extern long sched_getaffinity(pid_t pid, struct cpumask *mask);
 
+<<<<<<< HEAD
+=======
+extern int task_can_switch_user(struct user_struct *up,
+					struct task_struct *tsk);
+
+>>>>>>> 70806b21e4d6... sched/headers: Move the 'root_task_group' declaration to <linux/sched/autogroup.h>
 #ifndef TASK_SIZE_OF
 #define TASK_SIZE_OF(tsk)	TASK_SIZE
 #endif
