@@ -2,6 +2,7 @@
 #ifndef _LINUX_SCHED_H
 #define _LINUX_SCHED_H
 
+<<<<<<< HEAD
 /*
  * Define 'struct task_struct' and provide the main scheduler
  * APIs (schedule(), wakeup variants, etc.)
@@ -28,6 +29,40 @@
 #include <linux/mm_types_task.h>
 #include <linux/mm_event.h>
 #include <linux/task_io_accounting.h>
+=======
+#include <uapi/linux/sched.h>
+
+#include <linux/sched/prio.h>
+
+#include <linux/capability.h>
+#include <linux/mutex.h>
+#include <linux/plist.h>
+#include <linux/mm_types.h>
+#include <asm/ptrace.h>
+
+#include <linux/sem.h>
+#include <linux/shm.h>
+#include <linux/signal.h>
+#include <linux/signal_types.h>
+#include <linux/pid.h>
+#include <linux/seccomp.h>
+#include <linux/rculist.h>
+#include <linux/rtmutex.h>
+
+#include <linux/resource.h>
+#include <linux/hrtimer.h>
+#include <linux/kcov.h>
+#include <linux/task_io_accounting.h>
+#include <linux/latencytop.h>
+#include <linux/cred.h>
+#include <linux/gfp.h>
+#include <linux/topology.h>
+#include <linux/magic.h>
+#include <linux/cgroup-defs.h>
+
+struct sched_attr;
+struct sched_param;
+>>>>>>> 30a1baab8118... sched/headers: Remove various unrelated headers from <linux/sched.h>
 
 /* task_struct member predeclarations (sorted alphabetically): */
 struct audit_context;
