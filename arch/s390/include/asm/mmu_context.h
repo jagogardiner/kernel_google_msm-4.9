@@ -11,6 +11,7 @@
 #include <asm/uaccess.h>
 #include <asm/tlbflush.h>
 #include <asm/ctl_reg.h>
+#include <linux/mm_types.h>
 
 static inline int init_new_context(struct task_struct *tsk,
 				   struct mm_struct *mm)
