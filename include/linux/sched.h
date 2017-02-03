@@ -2,7 +2,6 @@
 #ifndef _LINUX_SCHED_H
 #define _LINUX_SCHED_H
 
-<<<<<<< HEAD
 /*
  * Define 'struct task_struct' and provide the main scheduler
  * APIs (schedule(), wakeup variants, etc.)
@@ -29,40 +28,6 @@
 #include <linux/mm_types_task.h>
 #include <linux/mm_event.h>
 #include <linux/task_io_accounting.h>
-=======
-#include <uapi/linux/sched.h>
-
-#include <linux/sched/prio.h>
-
-#include <linux/capability.h>
-#include <linux/mutex.h>
-#include <linux/plist.h>
-#include <linux/mm_types.h>
-#include <asm/ptrace.h>
-
-#include <linux/sem.h>
-#include <linux/shm.h>
-#include <linux/signal.h>
-#include <linux/signal_types.h>
-#include <linux/pid.h>
-#include <linux/seccomp.h>
-#include <linux/rculist.h>
-#include <linux/rtmutex.h>
-
-#include <linux/resource.h>
-#include <linux/hrtimer.h>
-#include <linux/kcov.h>
-#include <linux/task_io_accounting.h>
-#include <linux/latencytop.h>
-#include <linux/cred.h>
-#include <linux/gfp.h>
-#include <linux/topology.h>
-#include <linux/magic.h>
-#include <linux/cgroup-defs.h>
-
-struct sched_attr;
-struct sched_param;
->>>>>>> 30a1baab8118... sched/headers: Remove various unrelated headers from <linux/sched.h>
 
 /* task_struct member predeclarations (sorted alphabetically): */
 struct audit_context;
@@ -1706,12 +1671,8 @@ TASK_PFA_SET(SPEC_IB_FORCE_DISABLE, spec_ib_force_disable)
 TASK_PFA_TEST(LMK_WAITING, lmk_waiting)
 TASK_PFA_SET(LMK_WAITING, lmk_waiting)
 
-<<<<<<< HEAD
 static inline void
 current_restore_flags(unsigned long orig_flags, unsigned long flags)
-=======
-static inline void rcu_copy_process(struct task_struct *p)
->>>>>>> c41cfc6c5ba4... sched/headers: Move the JOBCTL_ defines and methods from <linux/sched.h> to <linux/sched/jobctl.h>
 {
 	current->flags &= ~flags;
 	current->flags |= orig_flags & flags;
@@ -2000,7 +1961,6 @@ static inline void set_task_cpu(struct task_struct *p, unsigned int cpu)
 extern long sched_setaffinity(pid_t pid, const struct cpumask *new_mask);
 extern long sched_getaffinity(pid_t pid, struct cpumask *mask);
 
-<<<<<<< HEAD
 #ifndef TASK_SIZE_OF
 #define TASK_SIZE_OF(tsk)	TASK_SIZE
 #endif
@@ -2032,17 +1992,5 @@ static inline void set_wake_up_idle(bool enabled)
 	else
 		current->flags &= ~PF_WAKE_UP_IDLE;
 }
-=======
-#ifdef CONFIG_CGROUP_SCHED
-extern struct task_group root_task_group;
-#endif /* CONFIG_CGROUP_SCHED */
-
-extern int task_can_switch_user(struct user_struct *up,
-					struct task_struct *tsk);
-
-#ifndef TASK_SIZE_OF
-#define TASK_SIZE_OF(tsk)	TASK_SIZE
-#endif
->>>>>>> 9a07000400c8... sched/headers: Move CONFIG_TASK_XACCT bits from <linux/sched.h> to <linux/sched/xacct.h>
 
 #endif
