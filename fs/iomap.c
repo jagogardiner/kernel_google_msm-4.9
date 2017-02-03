@@ -25,6 +25,8 @@
 #include <linux/backing-dev.h>
 #include <linux/buffer_head.h>
 #include <linux/dax.h>
+#include <linux/sched/signal.h>
+
 #include "internal.h"
 
 /*
