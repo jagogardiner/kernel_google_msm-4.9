@@ -44,6 +44,7 @@
 #include <linux/psci.h>
 #include <linux/dma-mapping.h>
 #include <linux/platform_device.h>
+#include <linux/sched/task.h>
 #include <linux/mm.h>
 
 #include <asm/acpi.h>
