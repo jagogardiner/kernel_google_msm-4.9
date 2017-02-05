@@ -58,6 +58,7 @@
 #include <linux/clk-provider.h>
 #include <linux/suspend.h>
 #include <linux/rtc.h>
+#include <linux/sched/cputime.h>
 #include <asm/trace.h>
 
 #include <asm/io.h>

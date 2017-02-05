@@ -29,6 +29,8 @@
 #include <linux/kvm_host.h>
 #include <linux/highmem.h>
 #include <linux/nospec.h>
+#include <linux/sched/cputime.h>
+
 #include <asm/apicdef.h>
 #include <trace/events/kvm.h>
 

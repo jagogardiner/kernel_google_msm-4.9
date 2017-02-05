@@ -22,6 +22,7 @@
 #include <linux/timex.h>
 #include <linux/timekeeper_internal.h>
 #include <linux/platform_device.h>
+#include <linux/sched/cputime.h>
 
 #include <asm/machvec.h>
 #include <asm/delay.h>

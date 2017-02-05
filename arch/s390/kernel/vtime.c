@@ -6,6 +6,7 @@
  */
 
 #include <linux/kernel_stat.h>
+#include <linux/sched/cputime.h>
 #include <linux/export.h>
 #include <linux/kernel.h>
 #include <linux/timex.h>
