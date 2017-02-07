@@ -34,10 +34,7 @@
 struct wake_q_head {
 	struct wake_q_node *first;
 	struct wake_q_node **lastp;
-<<<<<<< HEAD
 	int count;
-=======
->>>>>>> eb61baf69871... sched/headers: Move the wake-queue types and interfaces from sched.h into <linux/sched/wake_q.h>
 };
 
 #define WAKE_Q_TAIL ((struct wake_q_node *) 0x01)
@@ -49,10 +46,7 @@ static inline void wake_q_init(struct wake_q_head *head)
 {
 	head->first = WAKE_Q_TAIL;
 	head->lastp = &head->first;
-<<<<<<< HEAD
 	head->count = 0;
-=======
->>>>>>> eb61baf69871... sched/headers: Move the wake-queue types and interfaces from sched.h into <linux/sched/wake_q.h>
 }
 
 extern void wake_q_add(struct wake_q_head *head,
