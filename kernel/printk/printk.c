@@ -47,6 +47,7 @@
 #include <linux/uio.h>
 #include <linux/sched/clock.h>
 #include <linux/sched/debug.h>
+#include <linux/sched/task_stack.h>
 
 #include <asm/uaccess.h>
 #include <asm/sections.h>
