@@ -26,12 +26,9 @@
 #include <linux/personality.h>
 #include <linux/mm.h>
 #include <linux/mman.h>
-<<<<<<< HEAD
 #include <linux/module.h>
-=======
 #include <linux/sched/signal.h>
 #include <linux/sched/mm.h>
->>>>>>> 010426079ec1... sched/headers: Prepare for new header dependencies before moving more code to <linux/sched/mm.h>
 #include <linux/random.h>
 #include <linux/compat.h>
 #include <linux/security.h>
