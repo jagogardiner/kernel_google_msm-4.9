@@ -35,6 +35,7 @@
 #include <linux/utsname.h>
 #include <linux/coredump.h>
 #include <linux/sched.h>
+#include <linux/sched/coredump.h>
 #include <linux/dax.h>
 #include <asm/uaccess.h>
 #include <asm/param.h>
