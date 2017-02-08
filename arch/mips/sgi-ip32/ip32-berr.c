@@ -10,6 +10,7 @@
 #include <linux/init.h>
 #include <linux/kernel.h>
 #include <linux/sched.h>
+#include <linux/sched/debug.h>
 #include <asm/traps.h>
 #include <asm/uaccess.h>
 #include <asm/addrspace.h>
