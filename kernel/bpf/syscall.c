@@ -12,6 +12,7 @@
 #include <linux/bpf.h>
 #include <linux/syscalls.h>
 #include <linux/slab.h>
+#include <linux/sched/signal.h>
 #include <linux/vmalloc.h>
 #include <linux/mmzone.h>
 #include <linux/anon_inodes.h>

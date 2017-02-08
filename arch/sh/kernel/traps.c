@@ -8,7 +8,9 @@
 #include <linux/hardirq.h>
 #include <linux/kernel.h>
 #include <linux/kexec.h>
-#include <linux/module.h>
+#include <linux/sched/signal.h>
+
+#include <linux/module.h>	/* print_modules */
 #include <asm/unwinder.h>
 #include <asm/traps.h>
 

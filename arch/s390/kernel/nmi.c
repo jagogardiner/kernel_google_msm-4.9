@@ -14,6 +14,8 @@
 #include <linux/hardirq.h>
 #include <linux/time.h>
 #include <linux/module.h>
+#include <linux/sched/signal.h>
+
 #include <asm/lowcore.h>
 #include <asm/smp.h>
 #include <asm/stp.h>
