@@ -41,6 +41,7 @@
 #include <linux/page_idle.h>
 #include <linux/page_owner.h>
 #include <linux/ptrace.h>
+#include <linux/sched/mm.h>
 
 #include <asm/tlbflush.h>
 
