@@ -12,6 +12,7 @@
 #include <linux/sched/numa_balancing.h>
 #include <linux/sched/mm.h>
 #include <linux/sched/cpufreq.h>
+<<<<<<< HEAD
 #include <linux/sched/stat.h>
 #include <linux/sched/nohz.h>
 #include <linux/sched/debug.h>
@@ -22,6 +23,8 @@
 #include <linux/sched/init.h>
 #include <linux/sched/smt.h>
 
+=======
+>>>>>>> 55687da166bf... sched/headers: Prepare for new header dependencies before moving code to <linux/sched/cpufreq.h>
 #include <linux/u64_stats_sync.h>
 #include <linux/kernel_stat.h>
 #include <linux/binfmts.h>
