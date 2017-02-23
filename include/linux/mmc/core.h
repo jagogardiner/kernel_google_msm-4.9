@@ -11,6 +11,8 @@
 #include <uapi/linux/mmc/core.h>
 #include <linux/interrupt.h>
 #include <linux/completion.h>
+#include <linux/types.h>
+#include <linux/ktime.h>
 
 struct request;
 struct mmc_data;
