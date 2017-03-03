@@ -3561,8 +3561,6 @@ static int kswapd(void *p)
 	};
 	const struct cpumask *cpumask = cpumask_of_node(pgdat->node_id);
 
-	lockdep_set_current_reclaim_state(GFP_KERNEL);
-
 	if (!cpumask_empty(cpumask))
 		set_cpus_allowed_ptr(tsk, cpumask);
 	current->reclaim_state = &reclaim_state;
@@ -3625,13 +3623,15 @@ kswapd_try_sleep:
 		mm_event_start(&event_ts);
 		reclaim_order = balance_pgdat(pgdat, alloc_order, classzone_idx);
 		mm_event_end(MM_RECLAIM, event_ts);
+		fs_reclaim_acquire(GFP_KERNEL);
+		reclaim_order = balance_pgdat(pgdat, alloc_order, classzone_idx);
+		fs_reclaim_release(GFP_KERNEL);
 		if (reclaim_order < alloc_order)
 			goto kswapd_try_sleep;
 	}
 
 	tsk->flags &= ~(PF_MEMALLOC | PF_SWAPWRITE | PF_KSWAPD);
 	current->reclaim_state = NULL;
-	lockdep_clear_current_reclaim_state();
 
 	return 0;
 }
@@ -3694,6 +3694,8 @@ unsigned long shrink_all_memory(unsigned long nr_to_reclaim)
 
 	p->flags |= PF_MEMALLOC;
 	lockdep_set_current_reclaim_state(sc.gfp_mask);
+	noreclaim_flag = memalloc_noreclaim_save();
+	fs_reclaim_acquire(sc.gfp_mask);
 	reclaim_state.reclaimed_slab = 0;
 	p->reclaim_state = &reclaim_state;
 
@@ -3702,6 +3704,8 @@ unsigned long shrink_all_memory(unsigned long nr_to_reclaim)
 	p->reclaim_state = NULL;
 	lockdep_clear_current_reclaim_state();
 	p->flags &= ~PF_MEMALLOC;
+	fs_reclaim_release(sc.gfp_mask);
+	memalloc_noreclaim_restore(noreclaim_flag);
 
 	return nr_reclaimed;
 }
@@ -3883,8 +3887,9 @@ static int __node_reclaim(struct pglist_data *pgdat, gfp_t gfp_mask, unsigned in
 	 * and we also need to be able to write out pages for RECLAIM_WRITE
 	 * and RECLAIM_UNMAP.
 	 */
-	p->flags |= PF_MEMALLOC | PF_SWAPWRITE;
-	lockdep_set_current_reclaim_state(sc.gfp_mask);
+	noreclaim_flag = memalloc_noreclaim_save();
+	p->flags |= PF_SWAPWRITE;
+	fs_reclaim_acquire(sc.gfp_mask);
 	reclaim_state.reclaimed_slab = 0;
 	p->reclaim_state = &reclaim_state;
 
@@ -3899,8 +3904,9 @@ static int __node_reclaim(struct pglist_data *pgdat, gfp_t gfp_mask, unsigned in
 	}
 
 	p->reclaim_state = NULL;
-	current->flags &= ~(PF_MEMALLOC | PF_SWAPWRITE);
-	lockdep_clear_current_reclaim_state();
+	fs_reclaim_release(gfp_mask);
+	current->flags &= ~PF_SWAPWRITE;
+	memalloc_noreclaim_restore(noreclaim_flag);
 	return sc.nr_reclaimed >= nr_pages;
 }
 

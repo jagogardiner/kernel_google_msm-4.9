@@ -35,6 +35,8 @@
 #include <linux/list_sort.h>
 #include <asm/msr-index.h>
 #include <drm/drmP.h>
+#include <linux/sort.h>
+#include <linux/sched/mm.h>
 #include "intel_drv.h"
 #include "intel_ringbuffer.h"
 #include <drm/i915_drm.h>
@@ -4813,17 +4815,21 @@ i915_drop_caches_set(void *data, u64 val)
 			goto unlock;
 	}
 
-	if (val & (DROP_RETIRE | DROP_ACTIVE))
-		i915_gem_retire_requests(dev_priv);
-
+	fs_reclaim_acquire(GFP_KERNEL);
 	if (val & DROP_BOUND)
 		i915_gem_shrink(dev_priv, LONG_MAX, I915_SHRINK_BOUND);
 
 	if (val & DROP_UNBOUND)
 		i915_gem_shrink(dev_priv, LONG_MAX, I915_SHRINK_UNBOUND);
 
-unlock:
-	mutex_unlock(&dev->struct_mutex);
+	if (val & DROP_SHRINK_ALL)
+		i915_gem_shrink_all(dev_priv);
+	fs_reclaim_release(GFP_KERNEL);
+
+	if (val & DROP_FREED) {
+		synchronize_rcu();
+		i915_gem_drain_freed_objects(dev_priv);
+	}
 
 	return ret;
 }
