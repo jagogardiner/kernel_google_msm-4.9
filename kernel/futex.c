@@ -1333,7 +1333,7 @@ static int lookup_pi_state(u32 __user *uaddr, u32 uval,
 			   union futex_key *key, struct futex_pi_state **ps,
 			   struct task_struct **exiting)
 {
-	struct futex_q *match = futex_top_waiter(hb, key);
+	struct futex_q *top_waiter = futex_top_waiter(hb, key);
 
 	/*
 	 * If there is a waiter on that futex, validate it and
@@ -1395,7 +1395,7 @@ static int futex_lock_pi_atomic(u32 __user *uaddr, struct futex_hash_bucket *hb,
 				int set_waiters)
 {
 	u32 uval, newval, vpid = task_pid_vnr(task);
-	struct futex_q *match;
+	struct futex_q *top_waiter;
 	int ret;
 
 	/*
@@ -1513,11 +1513,11 @@ static void mark_wake_futex(struct wake_q_head *wake_q, struct futex_q *q)
 	q->lock_ptr = NULL;
 }
 
-static int wake_futex_pi(u32 __user *uaddr, u32 uval, struct futex_q *this,
+static int wake_futex_pi(u32 __user *uaddr, u32 uval, struct futex_q *top_waiter,
 			 struct futex_hash_bucket *hb)
 {
 	struct task_struct *new_owner;
-	struct futex_pi_state *pi_state = this->pi_state;
+	struct futex_pi_state *pi_state = top_waiter->pi_state;
 	u32 uninitialized_var(curval), newval;
 	DEFINE_WAKE_Q(wake_q);
 	bool deboost;
@@ -1538,11 +1538,11 @@ static int wake_futex_pi(u32 __user *uaddr, u32 uval, struct futex_q *this,
 
 	/*
 	 * It is possible that the next waiter (the one that brought
-	 * this owner to the kernel) timed out and is no longer
+	 * top_waiter owner to the kernel) timed out and is no longer
 	 * waiting on the lock.
 	 */
 	if (!new_owner)
-		new_owner = this->task;
+		new_owner = top_waiter->task;
 
 	/*
 	 * We pass it to the next owner. The WAITERS bit is always
@@ -2945,7 +2945,7 @@ static int futex_unlock_pi(u32 __user *uaddr, unsigned int flags)
 	u32 uninitialized_var(curval), uval, vpid = task_pid_vnr(current);
 	union futex_key key = FUTEX_KEY_INIT;
 	struct futex_hash_bucket *hb;
-	struct futex_q *match;
+	struct futex_q *top_waiter;
 	int ret;
 
 retry:
@@ -2969,9 +2969,9 @@ retry:
 	 * all and we at least want to know if user space fiddled
 	 * with the futex value instead of blindly unlocking.
 	 */
-	match = futex_top_waiter(hb, &key);
-	if (match) {
-		ret = wake_futex_pi(uaddr, uval, match, hb);
+	top_waiter = futex_top_waiter(hb, &key);
+	if (top_waiter) {
+		ret = wake_futex_pi(uaddr, uval, top_waiter, hb);
 		/*
 		 * In case of success wake_futex_pi dropped the hash
 		 * bucket lock.

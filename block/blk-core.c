@@ -1583,17 +1583,10 @@ void part_round_stats(struct request_queue *q, int cpu, struct hd_struct *part)
 
 	part_in_flight(q, part, inflight);
 
-<<<<<<< HEAD
 	if (stats & 2)
 		part_round_stats_single(q, cpu, part2, now, inflight[1]);
 	if (stats & 1)
 		part_round_stats_single(q, cpu, part, now, inflight[0]);
-=======
-	if (part->partno)
-		part_round_stats_single(q, cpu, &part_to_disk(part)->part0,
-						now);
-	part_round_stats_single(q, cpu, part, now);
->>>>>>> d62e26b3ffd2... block: pass in queue to inflight accounting
 }
 EXPORT_SYMBOL_GPL(part_round_stats);
 
