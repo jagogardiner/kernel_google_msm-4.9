@@ -49,26 +49,32 @@ SYS_NI(alarm);
 SYSCALL_DEFINE2(clock_settime, const clockid_t, which_clock,
 		const struct timespec __user *, tp)
 {
+	struct timespec64 new_tp64;
 	struct timespec new_tp;
 
 	if (which_clock != CLOCK_REALTIME)
 		return -EINVAL;
 	if (copy_from_user(&new_tp, tp, sizeof (*tp)))
 		return -EFAULT;
-	return do_sys_settimeofday(&new_tp, NULL);
+
+	new_tp64 = timespec_to_timespec64(new_tp);
+	return do_sys_settimeofday64(&new_tp64, NULL);
 }
 
 SYSCALL_DEFINE2(clock_gettime, const clockid_t, which_clock,
 		struct timespec __user *,tp)
 {
+	struct timespec64 kernel_tp64;
 	struct timespec kernel_tp;
 
 	switch (which_clock) {
-	case CLOCK_REALTIME: ktime_get_real_ts(&kernel_tp); break;
-	case CLOCK_MONOTONIC: ktime_get_ts(&kernel_tp); break;
-	case CLOCK_BOOTTIME: get_monotonic_boottime(&kernel_tp); break;
+	case CLOCK_REALTIME: ktime_get_real_ts64(&kernel_tp64); break;
+	case CLOCK_MONOTONIC: ktime_get_ts64(&kernel_tp64); break;
+	case CLOCK_BOOTTIME: get_monotonic_boottime64(&kernel_tp64); break;
 	default: return -EINVAL;
 	}
+
+	kernel_tp = timespec64_to_timespec(kernel_tp64);
 	if (copy_to_user(tp, &kernel_tp, sizeof (kernel_tp)))
 		return -EFAULT;
 	return 0;
