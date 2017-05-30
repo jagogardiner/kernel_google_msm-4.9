@@ -383,24 +383,12 @@ static void schedule_next_timer(struct k_itimer *timr)
 {
 	struct hrtimer *timer = &timr->it.real.timer;
 
-<<<<<<< HEAD
-	if (timr->it.real.interval.tv64 == 0)
-		return;
-
-	timr->it_overrun += hrtimer_forward(timer, timer->base->get_time(),
-					    timr->it.real.interval);
-
-	timr->it_overrun_last = timr->it_overrun;
-	timr->it_overrun = -1LL;
-	++timr->it_requeue_pending;
-=======
 	if (!timr->it_interval)
 		return;
 
 	timr->it_overrun += (unsigned int) hrtimer_forward(timer,
 						timer->base->get_time(),
 						timr->it_interval);
->>>>>>> 80105cd0e62b... posix-timers: Move interval out of the union
 	hrtimer_restart(timer);
 }
 
@@ -481,11 +469,7 @@ static enum hrtimer_restart posix_timer_fn(struct hrtimer *timer)
 	timr = container_of(timer, struct k_itimer, it.real.timer);
 	spin_lock_irqsave(&timr->it_lock, flags);
 
-<<<<<<< HEAD
-	if (timr->it.real.interval.tv64 != 0)
-=======
 	if (timr->it_interval != 0)
->>>>>>> 80105cd0e62b... posix-timers: Move interval out of the union
 		si_private = ++timr->it_requeue_pending;
 
 	if (posix_timer_event(timr, si_private)) {
@@ -494,11 +478,7 @@ static enum hrtimer_restart posix_timer_fn(struct hrtimer *timer)
 		 * we will not get a call back to restart it AND
 		 * it should be restarted.
 		 */
-<<<<<<< HEAD
-		if (timr->it.real.interval.tv64 != 0) {
-=======
 		if (timr->it_interval != 0) {
->>>>>>> 80105cd0e62b... posix-timers: Move interval out of the union
 			ktime_t now = hrtimer_cb_get_time(timer);
 
 			/*
@@ -527,14 +507,6 @@ static enum hrtimer_restart posix_timer_fn(struct hrtimer *timer)
 			{
 				ktime_t kj = ktime_set(0, NSEC_PER_SEC / HZ);
 
-<<<<<<< HEAD
-				if (timr->it.real.interval.tv64 < kj.tv64)
-					now = ktime_add(now, kj);
-			}
-#endif
-			timr->it_overrun += hrtimer_forward(timer, now,
-						timr->it.real.interval);
-=======
 				if (timr->it_interval < kj)
 					now = ktime_add(now, kj);
 			}
@@ -542,7 +514,6 @@ static enum hrtimer_restart posix_timer_fn(struct hrtimer *timer)
 			timr->it_overrun += (unsigned int)
 				hrtimer_forward(timer, now,
 						timr->it_interval);
->>>>>>> 80105cd0e62b... posix-timers: Move interval out of the union
 			ret = HRTIMER_RESTART;
 			++timr->it_requeue_pending;
 		}
@@ -658,7 +629,8 @@ SYSCALL_DEFINE3(timer_create, const clockid_t, which_clock,
 	it_id_set = IT_ID_SET;
 	new_timer->it_id = (timer_t) new_timer_id;
 	new_timer->it_clock = which_clock;
-	new_timer->it_overrun = -1LL;
+	new_timer->kclock = kc;
+	new_timer->it_overrun = -1;
 
 	if (timer_event_spec) {
 		if (copy_from_user(&event, timer_event_spec, sizeof (event))) {
@@ -818,7 +790,7 @@ SYSCALL_DEFINE2(timer_gettime, timer_t, timer_id,
 	if (!timr)
 		return -EINVAL;
 
-	kc = clockid_to_kclock(timr->it_clock);
+	kc = timr->kclock;
 	if (WARN_ON_ONCE(!kc || !kc->timer_get))
 		ret = -EINVAL;
 	else
@@ -871,11 +843,7 @@ common_timer_set(struct k_itimer *timr, int flags,
 		common_timer_get(timr, old_setting);
 
 	/* disable the timer */
-<<<<<<< HEAD
-	timr->it.real.interval.tv64 = 0;
-=======
 	timr->it_interval = 0;
->>>>>>> 80105cd0e62b... posix-timers: Move interval out of the union
 	/*
 	 * careful here.  If smp we could be in the "fire" routine which will
 	 * be spinning as we hold the lock.  But this is ONLY an SMP issue.
@@ -941,7 +909,7 @@ retry:
 	if (!timr)
 		return -EINVAL;
 
-	kc = clockid_to_kclock(timr->it_clock);
+	kc = timr->kclock;
 	if (WARN_ON_ONCE(!kc || !kc->timer_set))
 		error = -EINVAL;
 	else
@@ -963,11 +931,7 @@ retry:
 
 static int common_timer_del(struct k_itimer *timer)
 {
-<<<<<<< HEAD
-	timer->it.real.interval.tv64 = 0;
-=======
 	timer->it_interval = 0;
->>>>>>> 80105cd0e62b... posix-timers: Move interval out of the union
 
 	if (hrtimer_try_to_cancel(&timer->it.real.timer) < 0)
 		return TIMER_RETRY;
@@ -976,7 +940,7 @@ static int common_timer_del(struct k_itimer *timer)
 
 static inline int timer_delete_hook(struct k_itimer *timer)
 {
-	const struct k_clock *kc = clockid_to_kclock(timer->it_clock);
+	const struct k_clock *kc = timer->kclock;
 
 	if (WARN_ON_ONCE(!kc || !kc->timer_del))
 		return -EINVAL;
