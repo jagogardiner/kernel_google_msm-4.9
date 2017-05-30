@@ -365,21 +365,9 @@ static __init int init_posix_timers(void)
 					NULL);
 	return 0;
 }
-
 __initcall(init_posix_timers);
 
-/*
- * The siginfo si_overrun field and the return value of timer_getoverrun(2)
- * are of type int. Clamp the overrun value to INT_MAX
- */
-static inline int timer_overrun_to_int(struct k_itimer *timr, int baseval)
-{
-	s64 sum = timr->it_overrun_last + (s64)baseval;
-
-	return sum > (s64)INT_MAX ? INT_MAX : (int)sum;
-}
-
-static void schedule_next_timer(struct k_itimer *timr)
+static void common_hrtimer_rearm(struct k_itimer *timr)
 {
 	struct hrtimer *timer = &timr->it.real.timer;
 
@@ -410,11 +398,8 @@ void posixtimer_rearm(struct siginfo *info)
 
 	timr = lock_timer(info->si_tid, &flags);
 
-	if (timr && timr->it_requeue_pending == info->si_sys_private) {
-		if (timr->it_clock < 0)
-			posix_cpu_timer_schedule(timr);
-		else
-			schedule_next_timer(timr);
+	if (timr->it_requeue_pending == info->si_sys_private) {
+		timr->kclock->timer_rearm(timr);
 
 		timr->it_active = 1;
 		timr->it_overrun_last = timr->it_overrun;
@@ -1152,4 +1137,94 @@ long clock_nanosleep_restart(struct restart_block *restart_block)
 		return -EINVAL;
 
 	return kc->nsleep_restart(restart_block);
+}
+
+static const struct k_clock clock_realtime = {
+	.clock_getres	= posix_get_hrtimer_res,
+	.clock_get	= posix_clock_realtime_get,
+	.clock_set	= posix_clock_realtime_set,
+	.clock_adj	= posix_clock_realtime_adj,
+	.nsleep		= common_nsleep,
+	.nsleep_restart	= hrtimer_nanosleep_restart,
+	.timer_create	= common_timer_create,
+	.timer_set	= common_timer_set,
+	.timer_get	= common_timer_get,
+	.timer_del	= common_timer_del,
+	.timer_rearm	= common_hrtimer_rearm,
+};
+
+static const struct k_clock clock_monotonic = {
+	.clock_getres	= posix_get_hrtimer_res,
+	.clock_get	= posix_ktime_get_ts,
+	.nsleep		= common_nsleep,
+	.nsleep_restart	= hrtimer_nanosleep_restart,
+	.timer_create	= common_timer_create,
+	.timer_set	= common_timer_set,
+	.timer_get	= common_timer_get,
+	.timer_del	= common_timer_del,
+	.timer_rearm	= common_hrtimer_rearm,
+};
+
+static const struct k_clock clock_monotonic_raw = {
+	.clock_getres	= posix_get_hrtimer_res,
+	.clock_get	= posix_get_monotonic_raw,
+};
+
+static const struct k_clock clock_realtime_coarse = {
+	.clock_getres	= posix_get_coarse_res,
+	.clock_get	= posix_get_realtime_coarse,
+};
+
+static const struct k_clock clock_monotonic_coarse = {
+	.clock_getres	= posix_get_coarse_res,
+	.clock_get	= posix_get_monotonic_coarse,
+};
+
+static const struct k_clock clock_tai = {
+	.clock_getres	= posix_get_hrtimer_res,
+	.clock_get	= posix_get_tai,
+	.nsleep		= common_nsleep,
+	.nsleep_restart	= hrtimer_nanosleep_restart,
+	.timer_create	= common_timer_create,
+	.timer_set	= common_timer_set,
+	.timer_get	= common_timer_get,
+	.timer_del	= common_timer_del,
+	.timer_rearm	= common_hrtimer_rearm,
+};
+
+static const struct k_clock clock_boottime = {
+	.clock_getres	= posix_get_hrtimer_res,
+	.clock_get	= posix_get_boottime,
+	.nsleep		= common_nsleep,
+	.nsleep_restart	= hrtimer_nanosleep_restart,
+	.timer_create	= common_timer_create,
+	.timer_set	= common_timer_set,
+	.timer_get	= common_timer_get,
+	.timer_del	= common_timer_del,
+	.timer_rearm	= common_hrtimer_rearm,
+};
+
+static const struct k_clock * const posix_clocks[] = {
+	[CLOCK_REALTIME]		= &clock_realtime,
+	[CLOCK_MONOTONIC]		= &clock_monotonic,
+	[CLOCK_PROCESS_CPUTIME_ID]	= &clock_process,
+	[CLOCK_THREAD_CPUTIME_ID]	= &clock_thread,
+	[CLOCK_MONOTONIC_RAW]		= &clock_monotonic_raw,
+	[CLOCK_REALTIME_COARSE]		= &clock_realtime_coarse,
+	[CLOCK_MONOTONIC_COARSE]	= &clock_monotonic_coarse,
+	[CLOCK_BOOTTIME]		= &clock_boottime,
+	[CLOCK_REALTIME_ALARM]		= &alarm_clock,
+	[CLOCK_BOOTTIME_ALARM]		= &alarm_clock,
+	[CLOCK_TAI]			= &clock_tai,
+};
+
+static const struct k_clock *clockid_to_kclock(const clockid_t id)
+{
+	if (id < 0)
+		return (id & CLOCKFD_MASK) == CLOCKFD ?
+			&clock_posix_dynamic : &clock_posix_cpu;
+
+	if (id >= ARRAY_SIZE(posix_clocks) || !posix_clocks[id])
+		return NULL;
+	return posix_clocks[id];
 }
