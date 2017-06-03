@@ -150,10 +150,10 @@ static void log_end_io(struct bio *bio)
 {
 	struct log_writes_c *lc = bio->bi_private;
 
-	if (bio->bi_error) {
+	if (bio->bi_status) {
 		unsigned long flags;
 
-		DMERR("Error writing log block, error=%d", bio->bi_error);
+		DMERR("Error writing log block, error=%d", bio->bi_status);
 		spin_lock_irqsave(&lc->blocks_lock, flags);
 		lc->logging_enabled = false;
 		spin_unlock_irqrestore(&lc->blocks_lock, flags);

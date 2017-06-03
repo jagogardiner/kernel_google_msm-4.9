@@ -161,7 +161,7 @@ static void end_clone_bio(struct bio *clone)
 	struct dm_rq_target_io *tio = info->tio;
 	struct bio *bio = info->orig;
 	unsigned int nr_bytes = info->orig->bi_iter.bi_size;
-	int error = clone->bi_error;
+	blk_status_t error = clone->bi_status;
 
 	bio_put(clone);
 

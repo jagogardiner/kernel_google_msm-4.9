@@ -78,6 +78,7 @@ enum bio_post_read_step {
 	STEP_VERITY,
 };
 
+<<<<<<< HEAD
 struct bio_post_read_ctx {
 	struct bio *bio;
 	struct work_struct work;
@@ -96,6 +97,12 @@ static void __read_end_io(struct bio *bio)
 
 		/* PG_error was set if any post_read step failed */
 		if (bio->bi_error || PageError(page)) {
+=======
+		if (!bio->bi_status) {
+			if (!PageUptodate(page))
+				SetPageUptodate(page);
+		} else {
+>>>>>>> 4e4cbee93d56... block: switch bios to blk_status_t
 			ClearPageUptodate(page);
 			/* will re-read again later */
 			ClearPageError(page);
@@ -217,14 +224,14 @@ static void f2fs_write_end_io(struct bio *bio)
 			unlock_page(page);
 			mempool_free(page, sbi->write_io_dummy);
 
-			if (unlikely(bio->bi_error))
+			if (unlikely(bio->bi_status))
 				f2fs_stop_checkpoint(sbi, true);
 			continue;
 		}
 
 		fscrypt_pullback_bio_page(&page, true);
 
-		if (unlikely(bio->bi_error)) {
+		if (unlikely(bio->bi_status)) {
 			mapping_set_error(page->mapping, -EIO);
 			if (type == F2FS_WB_CP_DATA)
 				f2fs_stop_checkpoint(sbi, true);
