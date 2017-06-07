@@ -263,141 +263,28 @@ int compat_convert_timespec(struct timespec __user **kts,
 	return 0;
 }
 
-static long compat_nanosleep_restart(struct restart_block *restart)
+int get_compat_itimerval(struct itimerval *o, const struct compat_itimerval __user *i)
 {
-	struct compat_timespec __user *rmtp;
-	struct timespec rmt;
-	mm_segment_t oldfs;
-	long ret;
+	struct compat_itimerval v32;
 
-	restart->nanosleep.rmtp = (struct timespec __user *) &rmt;
-	oldfs = get_fs();
-	set_fs(KERNEL_DS);
-	ret = hrtimer_nanosleep_restart(restart);
-	set_fs(oldfs);
-
-	if (ret == -ERESTART_RESTARTBLOCK) {
-		rmtp = restart->nanosleep.compat_rmtp;
-
-		if (rmtp && compat_put_timespec(&rmt, rmtp))
-			return -EFAULT;
-	}
-
-	return ret;
-}
-
-COMPAT_SYSCALL_DEFINE2(nanosleep, struct compat_timespec __user *, rqtp,
-		       struct compat_timespec __user *, rmtp)
-{
-	struct timespec tu, rmt;
-	struct timespec64 tu64;
-	mm_segment_t oldfs;
-	long ret;
-
-	if (compat_get_timespec(&tu, rqtp))
+	if (copy_from_user(&v32, i, sizeof(struct compat_itimerval)))
 		return -EFAULT;
-
-	tu64 = timespec_to_timespec64(tu);
-	if (!timespec64_valid(&tu64))
-		return -EINVAL;
-
-	oldfs = get_fs();
-	set_fs(KERNEL_DS);
-	ret = hrtimer_nanosleep(&tu64,
-				rmtp ? (struct timespec __user *)&rmt : NULL,
-				HRTIMER_MODE_REL, CLOCK_MONOTONIC);
-	set_fs(oldfs);
-
-	/*
-	 * hrtimer_nanosleep() can only return 0 or
-	 * -ERESTART_RESTARTBLOCK here because:
-	 *
-	 * - we call it with HRTIMER_MODE_REL and therefor exclude the
-	 *   -ERESTARTNOHAND return path.
-	 *
-	 * - we supply the rmtp argument from the task stack (due to
-	 *   the necessary compat conversion. So the update cannot
-	 *   fail, which excludes the -EFAULT return path as well. If
-	 *   it fails nevertheless we have a bigger problem and wont
-	 *   reach this place anymore.
-	 *
-	 * - if the return value is 0, we do not have to update rmtp
-	 *    because there is no remaining time.
-	 *
-	 * We check for -ERESTART_RESTARTBLOCK nevertheless if the
-	 * core implementation decides to return random nonsense.
-	 */
-	if (ret == -ERESTART_RESTARTBLOCK) {
-		struct restart_block *restart = &current->restart_block;
-
-		restart->fn = compat_nanosleep_restart;
-		restart->nanosleep.compat_rmtp = rmtp;
-
-		if (rmtp && compat_put_timespec(&rmt, rmtp))
-			return -EFAULT;
-	}
-	return ret;
-}
-
-static inline long get_compat_itimerval(struct itimerval *o,
-		struct compat_itimerval __user *i)
-{
-	return (!access_ok(VERIFY_READ, i, sizeof(*i)) ||
-		(__get_user(o->it_interval.tv_sec, &i->it_interval.tv_sec) |
-		 __get_user(o->it_interval.tv_usec, &i->it_interval.tv_usec) |
-		 __get_user(o->it_value.tv_sec, &i->it_value.tv_sec) |
-		 __get_user(o->it_value.tv_usec, &i->it_value.tv_usec)));
-}
-
-static inline long put_compat_itimerval(struct compat_itimerval __user *o,
-		struct itimerval *i)
-{
-	return (!access_ok(VERIFY_WRITE, o, sizeof(*o)) ||
-		(__put_user(i->it_interval.tv_sec, &o->it_interval.tv_sec) |
-		 __put_user(i->it_interval.tv_usec, &o->it_interval.tv_usec) |
-		 __put_user(i->it_value.tv_sec, &o->it_value.tv_sec) |
-		 __put_user(i->it_value.tv_usec, &o->it_value.tv_usec)));
-}
-
-asmlinkage long sys_ni_posix_timers(void);
-
-COMPAT_SYSCALL_DEFINE2(getitimer, int, which,
-		struct compat_itimerval __user *, it)
-{
-	struct itimerval kit;
-	int error;
-
-	if (!IS_ENABLED(CONFIG_POSIX_TIMERS))
-		return sys_ni_posix_timers();
-
-	error = do_getitimer(which, &kit);
-	if (!error && put_compat_itimerval(it, &kit))
-		error = -EFAULT;
-	return error;
-}
-
-COMPAT_SYSCALL_DEFINE3(setitimer, int, which,
-		struct compat_itimerval __user *, in,
-		struct compat_itimerval __user *, out)
-{
-	struct itimerval kin, kout;
-	int error;
-
-	if (!IS_ENABLED(CONFIG_POSIX_TIMERS))
-		return sys_ni_posix_timers();
-
-	if (in) {
-		if (get_compat_itimerval(&kin, in))
-			return -EFAULT;
-	} else
-		memset(&kin, 0, sizeof(kin));
-
-	error = do_setitimer(which, &kin, out ? &kout : NULL);
-	if (error || !out)
-		return error;
-	if (put_compat_itimerval(out, &kout))
-		return -EFAULT;
+	o->it_interval.tv_sec = v32.it_interval.tv_sec;
+	o->it_interval.tv_usec = v32.it_interval.tv_usec;
+	o->it_value.tv_sec = v32.it_value.tv_sec;
+	o->it_value.tv_usec = v32.it_value.tv_usec;
 	return 0;
+}
+
+int put_compat_itimerval(struct compat_itimerval __user *o, const struct itimerval *i)
+{
+	struct compat_itimerval v32;
+
+	v32.it_interval.tv_sec = i->it_interval.tv_sec;
+	v32.it_interval.tv_usec = i->it_interval.tv_usec;
+	v32.it_value.tv_sec = i->it_value.tv_sec;
+	v32.it_value.tv_usec = i->it_value.tv_usec;
+	return copy_to_user(o, &v32, sizeof(struct compat_itimerval)) ? -EFAULT : 0;
 }
 
 static compat_clock_t clock_t_to_compat_clock_t(clock_t x)
