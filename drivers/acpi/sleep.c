@@ -994,8 +994,14 @@ static void acpi_sleep_suspend_setup(void)
 }
 
 #else /* !CONFIG_SUSPEND */
+#define s2idle_wakeup	(false)
 static inline void acpi_sleep_suspend_setup(void) {}
 #endif /* !CONFIG_SUSPEND */
+
+bool acpi_s2idle_wakeup(void)
+{
+	return s2idle_wakeup;
+}
 
 #ifdef CONFIG_PM_SLEEP
 static u32 saved_bm_rld;

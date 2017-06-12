@@ -228,7 +228,6 @@ static void s2idle_enter(void)
 
 	/* Push all the CPUs into the idle loop. */
 	wake_up_all_idle_cpus();
-	pr_debug("PM: suspend-to-idle\n");
 	/* Make the current CPU wait so it can enter the idle loop too. */
 	wait_event(s2idle_wait_head,
 		   s2idle_state == S2IDLE_STATE_WAKE);
@@ -575,10 +574,8 @@ static int suspend_enter(suspend_state_t state, bool *wakeup)
 	 * all the devices are suspended.
 	 */
 	if (state == PM_SUSPEND_FREEZE) {
-		trace_suspend_resume(TPS("machine_suspend"), state, true);
-		freeze_enter();
-		trace_suspend_resume(TPS("machine_suspend"), state, false);
-		goto Platform_wake;
+		s2idle_loop();
+		goto Platform_early_resume;
 	}
 
 	error = disable_nonboot_cpus();
