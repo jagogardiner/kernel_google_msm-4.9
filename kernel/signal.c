@@ -600,7 +600,7 @@ int dequeue_signal(struct task_struct *tsk, sigset_t *mask, siginfo_t *info)
 	signr = __dequeue_signal(&tsk->pending, mask, info, &resched_timer);
 	if (!signr) {
 		signr = __dequeue_signal(&tsk->signal->shared_pending,
-					 mask, info);
+					 mask, info, &resched_timer);
 #ifdef CONFIG_POSIX_TIMERS
 		/*
 		 * itimer signal ?
@@ -648,7 +648,7 @@ int dequeue_signal(struct task_struct *tsk, sigset_t *mask, siginfo_t *info)
 		current->jobctl |= JOBCTL_STOP_DEQUEUED;
 	}
 #ifdef CONFIG_POSIX_TIMERS
-	if ((info->si_code & __SI_MASK) == __SI_TIMER && info->si_sys_private) {
+	if (resched_timer) {
 		/*
 		 * Release the siglock to ensure proper locking order
 		 * of timer locks outside of siglocks.  Note, we leave
