@@ -484,7 +484,11 @@ static int bnep_session(void *arg)
 	struct net_device *dev = s->dev;
 	struct sock *sk = s->sock->sk;
 	struct sk_buff *skb;
+<<<<<<< HEAD
 	DEFINE_WAIT_FUNC(wait, woken_wake_function);
+=======
+	wait_queue_entry_t wait;
+>>>>>>> ac6424b981bc... sched/wait: Rename wait_queue_t => wait_queue_entry_t
 
 	BT_DBG("");
 

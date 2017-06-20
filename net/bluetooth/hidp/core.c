@@ -1256,8 +1256,7 @@ static int hidp_session_wake_function(wait_queue_t *wait,
 static int hidp_session_thread(void *arg)
 {
 	struct hidp_session *session = arg;
-	DEFINE_WAIT_FUNC(ctrl_wait, hidp_session_wake_function);
-	DEFINE_WAIT_FUNC(intr_wait, hidp_session_wake_function);
+	wait_queue_entry_t ctrl_wait, intr_wait;
 
 	BT_DBG("session %p", session);
 

@@ -106,7 +106,7 @@ static void autofs4_notify_daemon(struct autofs_sb_info *sbi,
 	int ret;
 
 	pr_debug("wait id = 0x%08lx, name = %.*s, type=%d\n",
-		 (unsigned long) wq->wait_queue_token,
+		 (unsigned long) wq->wait_queue_entry_token,
 		 wq->name.len, wq->name.name, type);
 
 	memset(&pkt, 0, sizeof(pkt)); /* For security reasons */
@@ -122,7 +122,7 @@ static void autofs4_notify_daemon(struct autofs_sb_info *sbi,
 
 		pktsz = sizeof(*mp);
 
-		mp->wait_queue_token = wq->wait_queue_token;
+		mp->wait_queue_entry_token = wq->wait_queue_entry_token;
 		mp->len = wq->name.len;
 		memcpy(mp->name, wq->name.name, wq->name.len);
 		mp->name[wq->name.len] = '\0';
@@ -135,7 +135,7 @@ static void autofs4_notify_daemon(struct autofs_sb_info *sbi,
 
 		pktsz = sizeof(*ep);
 
-		ep->wait_queue_token = wq->wait_queue_token;
+		ep->wait_queue_entry_token = wq->wait_queue_entry_token;
 		ep->len = wq->name.len;
 		memcpy(ep->name, wq->name.name, wq->name.len);
 		ep->name[wq->name.len] = '\0';
@@ -155,7 +155,7 @@ static void autofs4_notify_daemon(struct autofs_sb_info *sbi,
 
 		pktsz = sizeof(*packet);
 
-		packet->wait_queue_token = wq->wait_queue_token;
+		packet->wait_queue_entry_token = wq->wait_queue_entry_token;
 		packet->len = wq->name.len;
 		memcpy(packet->name, wq->name.name, wq->name.len);
 		packet->name[wq->name.len] = '\0';
@@ -435,7 +435,7 @@ int autofs4_wait(struct autofs_sb_info *sbi,
 			return -ENOMEM;
 		}
 
-		wq->wait_queue_token = autofs4_next_wait_queue;
+		wq->wait_queue_entry_token = autofs4_next_wait_queue;
 		if (++autofs4_next_wait_queue == 0)
 			autofs4_next_wait_queue = 1;
 		wq->next = sbi->queues;
@@ -468,7 +468,7 @@ int autofs4_wait(struct autofs_sb_info *sbi,
 		}
 
 		pr_debug("new wait id = 0x%08lx, name = %.*s, nfy=%d\n",
-			 (unsigned long) wq->wait_queue_token, wq->name.len,
+			 (unsigned long) wq->wait_queue_entry_token, wq->name.len,
 			 wq->name.name, notify);
 
 		/*
@@ -478,7 +478,7 @@ int autofs4_wait(struct autofs_sb_info *sbi,
 	} else {
 		wq->wait_ctr++;
 		pr_debug("existing wait id = 0x%08lx, name = %.*s, nfy=%d\n",
-			 (unsigned long) wq->wait_queue_token, wq->name.len,
+			 (unsigned long) wq->wait_queue_entry_token, wq->name.len,
 			 wq->name.name, notify);
 		mutex_unlock(&sbi->wq_mutex);
 		kfree(qstr.name);
@@ -557,13 +557,13 @@ int autofs4_wait(struct autofs_sb_info *sbi,
 }
 
 
-int autofs4_wait_release(struct autofs_sb_info *sbi, autofs_wqt_t wait_queue_token, int status)
+int autofs4_wait_release(struct autofs_sb_info *sbi, autofs_wqt_t wait_queue_entry_token, int status)
 {
 	struct autofs_wait_queue *wq, **wql;
 
 	mutex_lock(&sbi->wq_mutex);
 	for (wql = &sbi->queues; (wq = *wql) != NULL; wql = &wq->next) {
-		if (wq->wait_queue_token == wait_queue_token)
+		if (wq->wait_queue_entry_token == wait_queue_entry_token)
 			break;
 	}
 

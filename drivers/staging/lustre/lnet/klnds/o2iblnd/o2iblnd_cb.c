@@ -3293,8 +3293,8 @@ kiblnd_disconnect_conn(struct kib_conn *conn)
 int
 kiblnd_connd(void *arg)
 {
-	spinlock_t *lock= &kiblnd_data.kib_connd_lock;
-	wait_queue_t wait;
+	spinlock_t *lock = &kiblnd_data.kib_connd_lock;
+	wait_queue_entry_t wait;
 	unsigned long flags;
 	struct kib_conn *conn;
 	int timeout;
@@ -3550,7 +3550,7 @@ kiblnd_scheduler(void *arg)
 	long id = (long)arg;
 	struct kib_sched_info *sched;
 	struct kib_conn *conn;
-	wait_queue_t wait;
+	wait_queue_entry_t wait;
 	unsigned long flags;
 	struct ib_wc wc;
 	int did_something;
@@ -3685,7 +3685,7 @@ kiblnd_failover_thread(void *arg)
 {
 	rwlock_t *glock = &kiblnd_data.kib_global_lock;
 	struct kib_dev *dev;
-	wait_queue_t wait;
+	wait_queue_entry_t wait;
 	unsigned long flags;
 	int rc;
 

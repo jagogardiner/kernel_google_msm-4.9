@@ -305,11 +305,31 @@ struct exceptional_entry_key {
 };
 
 struct wait_exceptional_entry_queue {
-	wait_queue_t wait;
+	wait_queue_entry_t wait;
 	struct exceptional_entry_key key;
 };
 
-static int wake_exceptional_entry_func(wait_queue_t *wait, unsigned int mode,
+static wait_queue_head_t *dax_entry_waitqueue(struct address_space *mapping,
+		pgoff_t index, void *entry, struct exceptional_entry_key *key)
+{
+	unsigned long hash;
+
+	/*
+	 * If 'entry' is a PMD, align the 'index' that we use for the wait
+	 * queue to the start of that PMD.  This ensures that all offsets in
+	 * the range covered by the PMD map to the same bit lock.
+	 */
+	if (dax_is_pmd_entry(entry))
+		index &= ~((1UL << (PMD_SHIFT - PAGE_SHIFT)) - 1);
+
+	key->mapping = mapping;
+	key->entry_start = index;
+
+	hash = hash_long((unsigned long)mapping ^ index, DAX_WAIT_TABLE_BITS);
+	return wait_table + hash;
+}
+
+static int wake_exceptional_entry_func(wait_queue_entry_t *wait, unsigned int mode,
 				       int sync, void *keyp)
 {
 	struct exceptional_entry_key *key = keyp;

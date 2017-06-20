@@ -84,7 +84,19 @@ struct drm_i915_gem_request {
 	struct intel_signal_node signaling;
 
 	struct i915_sw_fence submit;
-	wait_queue_t submitq;
+	wait_queue_entry_t submitq;
+	wait_queue_head_t execute;
+
+	/* A list of everyone we wait upon, and everyone who waits upon us.
+	 * Even though we will not be submitted to the hardware before the
+	 * submit fence is signaled (it waits for all external events as well
+	 * as our own requests), the scheduler still needs to know the
+	 * dependency tree for the lifetime of the request (from execbuf
+	 * to retirement), i.e. bidirectional dependency information for the
+	 * request not tied to individual fences.
+	 */
+	struct i915_priotree priotree;
+	struct i915_dependency dep;
 
 	/** GEM sequence number associated with the previous request,
 	 * when the HWS breadcrumb is equal to this the GPU is processing

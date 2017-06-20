@@ -280,7 +280,7 @@ static int cmtp_session(void *arg)
 	struct cmtp_session *session = arg;
 	struct sock *sk = session->sock->sk;
 	struct sk_buff *skb;
-	DEFINE_WAIT_FUNC(wait, woken_wake_function);
+	wait_queue_entry_t wait;
 
 	BT_DBG("session %p", session);
 
