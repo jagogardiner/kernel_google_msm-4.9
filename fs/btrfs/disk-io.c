@@ -1118,9 +1118,9 @@ void clean_tree_block(struct btrfs_trans_handle *trans,
 		btrfs_assert_tree_locked(buf);
 
 		if (test_and_clear_bit(EXTENT_BUFFER_DIRTY, &buf->bflags)) {
-			__percpu_counter_add(&fs_info->dirty_metadata_bytes,
-					     -buf->len,
-					     fs_info->dirty_metadata_batch);
+			percpu_counter_add_batch(&fs_info->dirty_metadata_bytes,
+						 -buf->len,
+						 fs_info->dirty_metadata_batch);
 			/* ugh, clear_extent_buffer_dirty needs to lock the page */
 			btrfs_set_lock_blocking(buf);
 			clear_extent_buffer_dirty(buf);
@@ -3949,7 +3949,7 @@ void btrfs_mark_buffer_dirty(struct extent_buffer *buf)
 			buf->start, transid, root->fs_info->generation);
 	was_dirty = set_extent_buffer_dirty(buf);
 	if (!was_dirty)
-		__percpu_counter_add(&root->fs_info->dirty_metadata_bytes,
+		percpu_counter_add(&root->fs_info->dirty_metadata_bytes,
 				     buf->len,
 				     root->fs_info->dirty_metadata_batch);
 #ifdef CONFIG_BTRFS_FS_CHECK_INTEGRITY

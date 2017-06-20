@@ -1811,7 +1811,7 @@ static void btrfs_set_bit_hook(struct inode *inode,
 		if (btrfs_is_testing(root->fs_info))
 			return;
 
-		__percpu_counter_add(&root->fs_info->delalloc_bytes, len,
+		percpu_counter_add(&root->fs_info->delalloc_bytes, len,
 				     root->fs_info->delalloc_batch);
 		spin_lock(&BTRFS_I(inode)->lock);
 		BTRFS_I(inode)->delalloc_bytes += len;
@@ -1877,11 +1877,19 @@ static void btrfs_clear_bit_hook(struct inode *inode,
 			btrfs_free_reserved_data_space_noquota(inode,
 					state->start, len);
 
+<<<<<<< HEAD
 		__percpu_counter_add(&root->fs_info->delalloc_bytes, -len,
 				     root->fs_info->delalloc_batch);
 		spin_lock(&BTRFS_I(inode)->lock);
 		BTRFS_I(inode)->delalloc_bytes -= len;
 		if (do_list && BTRFS_I(inode)->delalloc_bytes == 0 &&
+=======
+		percpu_counter_add_batch(&fs_info->delalloc_bytes, -len,
+					 fs_info->delalloc_batch);
+		spin_lock(&inode->lock);
+		inode->delalloc_bytes -= len;
+		if (do_list && inode->delalloc_bytes == 0 &&
+>>>>>>> 104b4e5139fe... percpu_counter: Rename __percpu_counter_add to percpu_counter_add_batch
 		    test_bit(BTRFS_INODE_IN_DELALLOC_LIST,
 			     &BTRFS_I(inode)->runtime_flags))
 			btrfs_del_delalloc_inode(root, inode);
