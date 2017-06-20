@@ -110,7 +110,7 @@ static int userfaultfd_wake_function(wait_queue_entry_t *wq, unsigned mode,
 		 * wouldn't be enough, the smp_mb__before_spinlock is
 		 * enough to avoid an explicit smp_mb() here.
 		 */
-		list_del_init(&wq->task_list);
+		list_del_init(&wq->entry);
 out:
 	return ret;
 }
@@ -437,13 +437,13 @@ int handle_userfault(struct fault_env *fe, unsigned long reason)
 	 * and it's fine not to block on the spinlock. The uwq on this
 	 * kernel stack can be released after the list_del_init.
 	 */
-	if (!list_empty_careful(&uwq.wq.task_list)) {
+	if (!list_empty_careful(&uwq.wq.entry)) {
 		spin_lock(&ctx->fault_pending_wqh.lock);
 		/*
 		 * No need of list_del_init(), the uwq on the stack
 		 * will be freed shortly anyway.
 		 */
-		list_del(&uwq.wq.task_list);
+		list_del(&uwq.wq.entry);
 		spin_unlock(&ctx->fault_pending_wqh.lock);
 	}
 
@@ -540,8 +540,7 @@ static inline struct userfaultfd_wait_queue *find_userfault(
 	if (!waitqueue_active(&ctx->fault_pending_wqh))
 		goto out;
 	/* walk in reverse to provide FIFO behavior to read userfaults */
-	wq = list_last_entry(&ctx->fault_pending_wqh.task_list,
-			     typeof(*wq), task_list);
+	wq = list_last_entry(&wqh->head, typeof(*wq), entry);
 	uwq = container_of(wq, struct userfaultfd_wait_queue, wq);
 out:
 	return uwq;
@@ -622,14 +621,14 @@ static ssize_t userfaultfd_ctx_read(struct userfaultfd_ctx *ctx, int no_wait,
 			 * changes __remove_wait_queue() to use
 			 * list_del_init() in turn breaking the
 			 * !list_empty_careful() check in
-			 * handle_userfault(). The uwq->wq.task_list
+			 * handle_userfault(). The uwq->wq.head list
 			 * must never be empty at any time during the
 			 * refile, or the waitqueue could disappear
 			 * from under us. The "wait_queue_head_t"
 			 * parameter of __remove_wait_queue() is unused
 			 * anyway.
 			 */
-			list_del(&uwq->wq.task_list);
+			list_del(&uwq->wq.entry);
 			__add_wait_queue(&ctx->fault_wqh, &uwq->wq);
 
 			write_seqcount_end(&ctx->refile_seq);
@@ -641,6 +640,29 @@ static ssize_t userfaultfd_ctx_read(struct userfaultfd_ctx *ctx, int no_wait,
 			break;
 		}
 		spin_unlock(&ctx->fault_pending_wqh.lock);
+
+		spin_lock(&ctx->event_wqh.lock);
+		uwq = find_userfault_evt(ctx);
+		if (uwq) {
+			*msg = uwq->msg;
+
+			if (uwq->msg.event == UFFD_EVENT_FORK) {
+				fork_nctx = (struct userfaultfd_ctx *)
+					(unsigned long)
+					uwq->msg.arg.reserved.reserved1;
+				list_move(&uwq->wq.entry, &fork_event);
+				spin_unlock(&ctx->event_wqh.lock);
+				ret = 0;
+				break;
+			}
+
+			userfaultfd_event_complete(ctx, uwq);
+			spin_unlock(&ctx->event_wqh.lock);
+			ret = 0;
+			break;
+		}
+		spin_unlock(&ctx->event_wqh.lock);
+
 		if (signal_pending(current)) {
 			ret = -ERESTARTSYS;
 			break;
@@ -656,6 +678,23 @@ static ssize_t userfaultfd_ctx_read(struct userfaultfd_ctx *ctx, int no_wait,
 	__remove_wait_queue(&ctx->fd_wqh, &wait);
 	__set_current_state(TASK_RUNNING);
 	spin_unlock(&ctx->fd_wqh.lock);
+
+	if (!ret && msg->event == UFFD_EVENT_FORK) {
+		ret = resolve_userfault_fork(ctx, fork_nctx, msg);
+
+		if (!ret) {
+			spin_lock(&ctx->event_wqh.lock);
+			if (!list_empty(&fork_event)) {
+				uwq = list_first_entry(&fork_event,
+						       typeof(*uwq),
+						       wq.entry);
+				list_del(&uwq->wq.entry);
+				__add_wait_queue(&ctx->event_wqh, &uwq->wq);
+				userfaultfd_event_complete(ctx, uwq);
+			}
+			spin_unlock(&ctx->event_wqh.lock);
+		}
+	}
 
 	return ret;
 }
@@ -812,10 +851,6 @@ static int userfaultfd_register(struct userfaultfd_ctx *ctx,
 	down_write(&mm->mmap_sem);
 	if (!mmget_still_valid(mm))
 		goto out_unlock;
-<<<<<<< HEAD
-
-=======
->>>>>>> bb461ad8e6e0... coredump: fix race condition between mmget_not_zero()/get_task_mm() and core dumping
 	vma = find_vma_prev(mm, start, &prev);
 	if (!vma)
 		goto out_unlock;
@@ -977,10 +1012,6 @@ static int userfaultfd_unregister(struct userfaultfd_ctx *ctx,
 	down_write(&mm->mmap_sem);
 	if (!mmget_still_valid(mm))
 		goto out_unlock;
-<<<<<<< HEAD
-
-=======
->>>>>>> bb461ad8e6e0... coredump: fix race condition between mmget_not_zero()/get_task_mm() and core dumping
 	vma = find_vma_prev(mm, start, &prev);
 	if (!vma)
 		goto out_unlock;
@@ -1289,12 +1320,12 @@ static void userfaultfd_show_fdinfo(struct seq_file *m, struct file *f)
 	unsigned long pending = 0, total = 0;
 
 	spin_lock(&ctx->fault_pending_wqh.lock);
-	list_for_each_entry(wq, &ctx->fault_pending_wqh.task_list, task_list) {
+	list_for_each_entry(wq, &ctx->fault_pending_wqh.head, entry) {
 		uwq = container_of(wq, struct userfaultfd_wait_queue, wq);
 		pending++;
 		total++;
 	}
-	list_for_each_entry(wq, &ctx->fault_wqh.task_list, task_list) {
+	list_for_each_entry(wq, &ctx->fault_wqh.head, entry) {
 		uwq = container_of(wq, struct userfaultfd_wait_queue, wq);
 		total++;
 	}

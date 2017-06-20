@@ -1015,6 +1015,17 @@ static int ep_poll_callback(wait_queue_entry_t *wait, unsigned mode, int sync, v
 	struct eventpoll *ep = epi->ep;
 	int ewake = 0;
 
+	if ((unsigned long)key & POLLFREE) {
+		ep_pwq_from_wait(wait)->whead = NULL;
+		/*
+		 * whead = NULL above can race with ep_remove_wait_queue()
+		 * which can do another remove_wait_queue() after us, so we
+		 * can't use __remove_wait_queue(). whead->lock is held by
+		 * the caller.
+		 */
+		list_del_init(&wait->entry);
+	}
+
 	spin_lock_irqsave(&ep->lock, flags);
 
 	/*

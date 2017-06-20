@@ -783,8 +783,11 @@ static void __blk_mq_run_hw_queue(struct blk_mq_hw_ctx *hctx)
 	if (unlikely(test_bit(BLK_MQ_S_STOPPED, &hctx->state)))
 		return;
 
-	WARN_ON(!cpumask_test_cpu(raw_smp_processor_id(), hctx->cpumask) &&
-		cpu_online(hctx->next_cpu));
+	list_del(&wait->entry);
+	clear_bit_unlock(BLK_MQ_S_TAG_WAITING, &hctx->state);
+	blk_mq_run_hw_queue(hctx, true);
+	return 1;
+}
 
 	hctx->run++;
 
