@@ -28,6 +28,7 @@
 #define __LINUX__AIO_ABI_H
 
 #include <linux/types.h>
+#include <linux/fs.h>
 #include <asm/byteorder.h>
 
 typedef __kernel_ulong_t aio_context_t;
@@ -61,14 +62,6 @@ struct io_event {
 	__s64		res;		/* result code for this event */
 	__s64		res2;		/* secondary result */
 };
-
-#if defined(__BYTE_ORDER) ? __BYTE_ORDER == __LITTLE_ENDIAN : defined(__LITTLE_ENDIAN)
-#define PADDED(x,y)	x, y
-#elif defined(__BYTE_ORDER) ? __BYTE_ORDER == __BIG_ENDIAN : defined(__BIG_ENDIAN)
-#define PADDED(x,y)	y, x
-#else
-#error edit for your odd byteorder.
-#endif
 
 /*
  * we always use a 64bit off_t when communicating
