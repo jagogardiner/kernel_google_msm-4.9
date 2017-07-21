@@ -248,28 +248,14 @@ static void s2idle_loop(void)
 {
 	pm_pr_dbg("suspend-to-idle\n");
 
-	for (;;) {
-		int error;
-
-		dpm_noirq_begin();
-
+	while (!dpm_suspend_noirq(PMSG_SUSPEND)) {
 		/*
 		 * Suspend-to-idle equals
 		 * frozen processes + suspended devices + idle processors.
-		 * Thus s2idle_enter() should be called right after
+		 * Thus freeze_enter() should be called right after
 		 * all devices have been suspended.
-		 *
-		 * Wakeups during the noirq suspend of devices may be spurious,
-		 * so prevent them from terminating the loop right away.
 		 */
-		error = dpm_noirq_suspend_devices(PMSG_SUSPEND);
-		if (!error)
-			s2idle_enter();
-		else if (error == -EBUSY && pm_wakeup_pending())
-			error = 0;
-
-		if (!error && s2idle_ops && s2idle_ops->wake)
-			s2idle_ops->wake();
+		freeze_enter();
 
 		dpm_noirq_resume_devices(PMSG_RESUME);
 
@@ -566,17 +552,6 @@ static int suspend_enter(suspend_state_t state, bool *wakeup)
 
 	if (suspend_test(TEST_PLATFORM))
 		goto Platform_wake;
-
-	/*
-	 * PM_SUSPEND_FREEZE equals
-	 * frozen processes + suspended devices + idle processors.
-	 * Thus we should invoke freeze_enter() soon after
-	 * all the devices are suspended.
-	 */
-	if (state == PM_SUSPEND_FREEZE) {
-		s2idle_loop();
-		goto Platform_early_resume;
-	}
 
 	error = disable_nonboot_cpus();
 	if (error || suspend_test(TEST_CPUS)) {
