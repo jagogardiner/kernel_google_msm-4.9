@@ -405,7 +405,24 @@ static ssize_t pm_hang_store(struct kobject *kobj, struct kobj_attribute *attr,
 	if (val > 1)
 		return -EINVAL;
 
-	pm_hang_enabled = !!val;
+	pm_debug_messages_on = !!val;
+	return n;
+}
+
+power_attr(pm_debug_messages);
+
+/**
+ * __pm_pr_dbg - Print a suspend debug message to the kernel log.
+ * @defer: Whether or not to use printk_deferred() to print the message.
+ * @fmt: Message format.
+ *
+ * The message will be emitted if enabled through the pm_debug_messages
+ * sysfs attribute.
+ */
+void __pm_pr_dbg(bool defer, const char *fmt, ...)
+{
+	struct va_format vaf;
+	va_list args;
 
 	if (pm_hang_enabled == true) {
 
@@ -416,11 +433,10 @@ static ssize_t pm_hang_store(struct kobject *kobj, struct kobj_attribute *attr,
 
 	} else {
 
-		result = unregister_pm_notifier(&pm_notify_nb);
-		if (result)
-			pr_warn("Can not unregister suspend notifier, return %d\n",
-				result);
-	}
+	if (defer)
+		printk_deferred(KERN_DEBUG "PM: %pV", &vaf);
+	else
+		printk(KERN_DEBUG "PM: %pV", &vaf);
 
 	return n;
 }
