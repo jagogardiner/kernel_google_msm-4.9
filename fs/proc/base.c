@@ -1463,13 +1463,13 @@ static const struct file_operations proc_pid_sched_operations = {
 static int sched_wake_up_idle_show(struct seq_file *m, void *v)
 {
 	struct inode *inode = m->private;
+	struct pid_namespace *ns = inode->i_sb->s_fs_info;
 	struct task_struct *p;
 
 	p = get_proc_task(inode);
 	if (!p)
 		return -ESRCH;
-
-	seq_printf(m, "%d\n", sched_get_wake_up_idle(p));
+	proc_sched_show_task(p, ns, m);
 
 	put_task_struct(p);
 
