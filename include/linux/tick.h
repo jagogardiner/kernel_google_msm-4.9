@@ -116,11 +116,8 @@ enum tick_dep_bits {
 extern bool tick_nohz_enabled;
 extern int tick_nohz_tick_stopped(void);
 extern void tick_nohz_idle_stop_tick(void);
-<<<<<<< HEAD
-=======
 extern void tick_nohz_idle_retain_tick(void);
 extern void tick_nohz_idle_restart_tick(void);
->>>>>>> 8c71f69fb440... UPSTREAM: sched: idle: Select idle state before stopping the tick
 extern void tick_nohz_idle_enter(void);
 extern void tick_nohz_idle_exit(void);
 extern void tick_nohz_irq_exit(void);
@@ -140,11 +137,8 @@ static inline void tick_nohz_idle_stop_tick_protected(void)
 #define tick_nohz_enabled (0)
 static inline int tick_nohz_tick_stopped(void) { return 0; }
 static inline void tick_nohz_idle_stop_tick(void) { }
-<<<<<<< HEAD
-=======
 static inline void tick_nohz_idle_retain_tick(void) { }
 static inline void tick_nohz_idle_restart_tick(void) { }
->>>>>>> 8c71f69fb440... UPSTREAM: sched: idle: Select idle state before stopping the tick
 static inline void tick_nohz_idle_enter(void) { }
 static inline void tick_nohz_idle_exit(void) { }
 
