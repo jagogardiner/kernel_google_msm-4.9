@@ -745,13 +745,13 @@ static struct acpi_scan_handler lps0_handler = {
 	.attach = lps0_device_attach,
 };
 
-static int acpi_freeze_begin(void)
+static int acpi_s2idle_begin(void)
 {
 	acpi_scan_lock_acquire();
 	return 0;
 }
 
-static int acpi_freeze_prepare(void)
+static int acpi_s2idle_prepare(void)
 {
 	acpi_enable_wakeup_devices(ACPI_STATE_S0);
 	acpi_enable_all_wakeup_gpes();
@@ -761,7 +761,34 @@ static int acpi_freeze_prepare(void)
 	return 0;
 }
 
-static void acpi_freeze_restore(void)
+static void acpi_s2idle_wake(void)
+{
+	/*
+	 * If IRQD_WAKEUP_ARMED is not set for the SCI at this point, it means
+	 * that the SCI has triggered while suspended, so cancel the wakeup in
+	 * case it has not been a wakeup event (the GPEs will be checked later).
+	 */
+	if (acpi_sci_irq_valid() &&
+	    !irqd_is_wakeup_armed(irq_get_irq_data(acpi_sci_irq))) {
+		pm_system_cancel_wakeup();
+		s2idle_wakeup = true;
+	}
+}
+
+static void acpi_s2idle_sync(void)
+{
+	/*
+	 * Process all pending events in case there are any wakeup ones.
+	 *
+	 * The EC driver uses the system workqueue, so that one needs to be
+	 * flushed too.
+	 */
+	acpi_os_wait_events_complete();
+	flush_scheduled_work();
+	s2idle_wakeup = false;
+}
+
+static void acpi_s2idle_restore(void)
 {
 	acpi_disable_wakeup_devices(ACPI_STATE_S0);
 	if (acpi_sci_irq_valid())
@@ -769,16 +796,18 @@ static void acpi_freeze_restore(void)
 	acpi_enable_all_runtime_gpes();
 }
 
-static void acpi_freeze_end(void)
+static void acpi_s2idle_end(void)
 {
 	acpi_scan_lock_release();
 }
 
-static const struct platform_freeze_ops acpi_freeze_ops = {
-	.begin = acpi_freeze_begin,
-	.prepare = acpi_freeze_prepare,
-	.restore = acpi_freeze_restore,
-	.end = acpi_freeze_end,
+static const struct platform_s2idle_ops acpi_s2idle_ops = {
+	.begin = acpi_s2idle_begin,
+	.prepare = acpi_s2idle_prepare,
+	.wake = acpi_s2idle_wake,
+	.sync = acpi_s2idle_sync,
+	.restore = acpi_s2idle_restore,
+	.end = acpi_s2idle_end,
 };
 
 static void acpi_sleep_suspend_setup(void)
@@ -791,7 +820,9 @@ static void acpi_sleep_suspend_setup(void)
 
 	suspend_set_ops(old_suspend_ordering ?
 		&acpi_suspend_ops_old : &acpi_suspend_ops);
-	freeze_set_ops(&acpi_freeze_ops);
+
+	acpi_scan_add_handler(&lps0_handler);
+	s2idle_set_ops(&acpi_s2idle_ops);
 }
 
 #else /* !CONFIG_SUSPEND */
