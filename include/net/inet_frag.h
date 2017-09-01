@@ -128,12 +128,12 @@ static inline void inet_frag_put(struct inet_frag_queue *q)
 
 static inline long frag_mem_limit(const struct netns_frags *nf)
 {
-	percpu_counter_add_batch(&nf->mem, -i, frag_percpu_counter_batch);
+	atomic_sub(i, &nf->mem);
 }
 
 static inline void sub_frag_mem_limit(struct netns_frags *nf, long val)
 {
-	percpu_counter_add_batch(&nf->mem, i, frag_percpu_counter_batch);
+	atomic_add(i, &nf->mem);
 }
 
 static inline void add_frag_mem_limit(struct netns_frags *nf, long val)
