@@ -872,9 +872,74 @@ static void __blk_mq_run_hw_queue(struct blk_mq_hw_ctx *hctx)
 		 * requests in rq_list aren't added into hctx->dispatch yet,
 		 * the requests in rq_list might get lost.
 		 *
-		 * blk_mq_run_hw_queue() already checks the STOPPED bit
-		 **/
-		blk_mq_run_hw_queue(hctx, true);
+		 * If TAG_WAITING is set that means that an I/O scheduler has
+		 * been configured and another thread is waiting for a driver
+		 * tag. To guarantee fairness, do not rerun this hardware queue
+		 * but let the other thread grab the driver tag.
+		 *
+		 * If no I/O scheduler has been configured it is possible that
+		 * the hardware queue got stopped and restarted before requests
+		 * were pushed back onto the dispatch list. Rerun the queue to
+		 * avoid starvation. Notes:
+		 * - blk_mq_run_hw_queue() checks whether or not a queue has
+		 *   been stopped before rerunning a queue.
+		 * - Some but not all block drivers stop a queue before
+		 *   returning BLK_STS_RESOURCE. Two exceptions are scsi-mq
+		 *   and dm-rq.
+		 */
+		if (!blk_mq_sched_needs_restart(hctx) &&
+		    !test_bit(BLK_MQ_S_TAG_WAITING, &hctx->state))
+			blk_mq_run_hw_queue(hctx, true);
+	}
+
+	return (queued + errors) != 0;
+}
+
+static void __blk_mq_run_hw_queue(struct blk_mq_hw_ctx *hctx)
+{
+	int srcu_idx;
+
+	/*
+	 * We should be running this queue from one of the CPUs that
+	 * are mapped to it.
+	 *
+	 * There are at least two related races now between setting
+	 * hctx->next_cpu from blk_mq_hctx_next_cpu() and running
+	 * __blk_mq_run_hw_queue():
+	 *
+	 * - hctx->next_cpu is found offline in blk_mq_hctx_next_cpu(),
+	 *   but later it becomes online, then this warning is harmless
+	 *   at all
+	 *
+	 * - hctx->next_cpu is found online in blk_mq_hctx_next_cpu(),
+	 *   but later it becomes offline, then the warning can't be
+	 *   triggered, and we depend on blk-mq timeout handler to
+	 *   handle dispatched requests to this hctx
+	 */
+	if (!cpumask_test_cpu(raw_smp_processor_id(), hctx->cpumask) &&
+		cpu_online(hctx->next_cpu)) {
+		printk(KERN_WARNING "run queue from wrong CPU %d, hctx %s\n",
+			raw_smp_processor_id(),
+			cpumask_empty(hctx->cpumask) ? "inactive": "active");
+		dump_stack();
+	}
+
+	/*
+	 * We can't run the queue inline with ints disabled. Ensure that
+	 * we catch bad users of this early.
+	 */
+	WARN_ON_ONCE(in_interrupt());
+
+	if (!(hctx->flags & BLK_MQ_F_BLOCKING)) {
+		rcu_read_lock();
+		blk_mq_sched_dispatch_requests(hctx);
+		rcu_read_unlock();
+	} else {
+		might_sleep();
+
+		srcu_idx = srcu_read_lock(hctx->queue_rq_srcu);
+		blk_mq_sched_dispatch_requests(hctx);
+		srcu_read_unlock(hctx->queue_rq_srcu, srcu_idx);
 	}
 }
 

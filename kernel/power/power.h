@@ -242,11 +242,7 @@ enum {
 #define TEST_FIRST	TEST_NONE
 #define TEST_MAX	(__TEST_AFTER_LAST - 1)
 
-<<<<<<< HEAD
 #ifdef CONFIG_PM_SLEEP_DEBUG
-=======
-#ifdef CONFIG_PM_DEBUG
->>>>>>> 8e6bcd9f7eac... PM / s2idle: Rearrange the main suspend-to-idle loop
 extern int pm_test_level;
 #else
 #define pm_test_level	(TEST_NONE)
