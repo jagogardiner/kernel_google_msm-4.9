@@ -626,6 +626,19 @@ struct ufshcd_req_stat {
 	u64 sum;
 	u64 count;
 };
+#endif
+
+enum ufshcd_ctx {
+	QUEUE_CMD,
+	ERR_HNDLR_WORK,
+	H8_EXIT_WORK,
+	UIC_CMD_SEND,
+	PWRCTL_CMD_SEND,
+	TM_CMD_SEND,
+	XFR_REQ_COMPL,
+	CLK_SCALE_WORK,
+	DBGFS_CFG_PWR_MODE,
+};
 
 /**
  * struct ufshcd_io_stat - statistics for I/O amount.
@@ -1264,6 +1277,7 @@ extern int ufshcd_dme_set_attr(struct ufs_hba *hba, u32 attr_sel,
 			       u8 attr_set, u32 mib_val, u8 peer);
 extern int ufshcd_dme_get_attr(struct ufs_hba *hba, u32 attr_sel,
 			       u32 *mib_val, u8 peer);
+extern int ufshcd_scale_clks(struct ufs_hba *hba, bool scale_up);
 
 /* UIC command interfaces for DME primitives */
 #define DME_LOCAL	0
