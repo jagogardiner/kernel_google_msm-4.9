@@ -534,12 +534,8 @@ static void cpu_timer_fire(struct k_itimer *timer)
 		 * reload the timer.  But we need to keep it
 		 * ticking in case the signal is deliverable next time.
 		 */
-<<<<<<< HEAD
-		posix_cpu_timer_schedule(timer);
-=======
 		posix_cpu_timer_rearm(timer);
 		++timer->it_requeue_pending;
->>>>>>> f37fb0aa4f45... posix-timers: Use timer_rearm() callback in posixtimer_rearm()
 	}
 }
 
