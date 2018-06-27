@@ -3104,7 +3104,7 @@ void walt_irq_work(struct irq_work *irq_work)
 	struct sched_cluster *cluster;
 	struct rq *rq;
 	int cpu;
-	u64 wc;
+	u64 wc, total_grp_load = 0;
 	bool is_migration = false;
 	int level = 0;
 
