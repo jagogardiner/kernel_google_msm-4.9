@@ -2919,9 +2919,6 @@ static int do_check(struct bpf_verifier_env *env)
 			goto process_bpf_exit;
 		}
 
-		if (signal_pending(current))
-			return -EAGAIN;
-
 		if (need_resched())
 			cond_resched();
 

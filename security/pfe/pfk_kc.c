@@ -168,10 +168,6 @@ static int kc_entry_wait_till_available(struct kc_entry *entry)
 
 	while (!kc_entry_is_available(entry)) {
 		set_current_state(TASK_INTERRUPTIBLE);
-		if (signal_pending(current)) {
-			res = -ERESTARTSYS;
-			break;
-		}
 		/* assuming only one thread can try to invalidate
 		 * the same entry
 		 */
