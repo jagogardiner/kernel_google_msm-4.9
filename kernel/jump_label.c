@@ -362,6 +362,29 @@ struct static_key_mod {
 	struct module *mod;
 };
 
+static inline struct static_key_mod *static_key_mod(struct static_key *key)
+{
+	WARN_ON_ONCE(!static_key_linked(key));
+	return (struct static_key_mod *)(key->type & ~JUMP_TYPE_MASK);
+}
+
+/***
+ * key->type and key->next are the same via union.
+ * This sets key->next and preserves the type bits.
+ *
+ * See additional comments above static_key_set_entries().
+ */
+static void static_key_set_mod(struct static_key *key,
+			       struct static_key_mod *mod)
+{
+	unsigned long type;
+
+	WARN_ON_ONCE((unsigned long)mod & JUMP_TYPE_MASK);
+	type = key->type & JUMP_TYPE_MASK;
+	key->next = mod;
+	key->type |= type;
+}
+
 static int __jump_label_mod_text_reserved(void *start, void *end)
 {
 	struct module *mod;
