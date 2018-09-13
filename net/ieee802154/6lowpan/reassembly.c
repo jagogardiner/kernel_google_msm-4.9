@@ -410,6 +410,7 @@ err:
 }
 
 #ifdef CONFIG_SYSCTL
+static long zero;
 
 static struct ctl_table lowpan_frags_ns_ctl_table[] = {
 	{
@@ -426,6 +427,7 @@ static struct ctl_table lowpan_frags_ns_ctl_table[] = {
 		.maxlen		= sizeof(unsigned long),
 		.mode		= 0644,
 		.proc_handler	= proc_doulongvec_minmax,
+		.extra1		= &zero,
 		.extra2		= &init_net.ieee802154_lowpan.frags.high_thresh
 	},
 	{
