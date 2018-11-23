@@ -2337,6 +2337,7 @@ static inline u64 irq_time_read(int cpu)
 #ifdef CONFIG_SCHED_WALT
 void note_task_waking(struct task_struct *p, u64 wallclock);
 #else /* CONFIG_SCHED_WALT */
+#define sched_ktime_clock ktime_get_ns
 static inline void note_task_waking(struct task_struct *p, u64 wallclock) { }
 #endif /* CONFIG_SCHED_WALT */
 
