@@ -7212,6 +7212,9 @@ static inline int find_best_target(struct task_struct *p, int *backup_cpu,
 	long spare_wake_cap, most_spare_wake_cap = 0;
 	int most_spare_cap_cpu = -1;
 	unsigned int active_cpus_count = 0;
+	int isolated_candidate = -1;
+	int prev_cpu = task_cpu(p);
+	struct task_struct *curr_tsk;
 
 	*backup_cpu = -1;
 
@@ -7559,11 +7562,12 @@ static inline int find_best_target(struct task_struct *p, int *backup_cpu,
 	 *   b) IDLE CPU: best_idle_cpu
 	 */
 
-	if (prefer_idle && (best_idle_cpu != -1)) {
-		trace_sched_find_best_target(p, prefer_idle, min_util, cpu,
-					     best_idle_cpu, best_active_cpu,
-					     -1);
-		return best_idle_cpu;
+	if (target_cpu != -1 && !idle_cpu(target_cpu) &&
+			best_idle_cpu != -1) {
+		curr_tsk = READ_ONCE(cpu_rq(target_cpu)->curr);
+		if (curr_tsk && schedtune_task_boost_rcu_locked(curr_tsk)) {
+			target_cpu = best_idle_cpu;
+		}
 	}
 
 	if (target_cpu == -1)
