@@ -1282,17 +1282,12 @@ static int ep_create_wakeup_source(struct epitem *epi)
 	get_task_comm(task_comm_buf, current);
 
 	if (!epi->ep->ws) {
-		snprintf(buf, sizeof(buf), "epoll_%.*s_epollfd",
-			 (int)sizeof(task_comm_buf), task_comm_buf);
-		epi->ep->ws = wakeup_source_register(buf);
 		if (!epi->ep->ws)
 			return -ENOMEM;
 	}
 
 	name = epi->ffd.file->f_path.dentry->d_name.name;
-	snprintf(buf, sizeof(buf), "epoll_%.*s_file:%s",
-		 (int)sizeof(task_comm_buf), task_comm_buf, name);
-	ws = wakeup_source_register(buf);
+	ws = wakeup_source_register(NULL, name);
 
 	if (!ws)
 		return -ENOMEM;
