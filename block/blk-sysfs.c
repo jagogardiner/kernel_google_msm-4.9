@@ -638,7 +638,12 @@ static void blk_release_queue(struct kobject *kobj)
 		elevator_exit(q->elevator);
 	}
 
-	blk_exit_rl(&q->root_rl);
+	blk_free_queue_stats(q->stats);
+
+	if (q->mq_ops)
+		cancel_delayed_work_sync(&q->requeue_work);
+
+	blk_exit_rl(q, &q->root_rl);
 
 	if (q->queue_tags)
 		__blk_queue_free_tags(q);
