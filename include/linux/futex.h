@@ -1,6 +1,9 @@
 #ifndef _LINUX_FUTEX_H
 #define _LINUX_FUTEX_H
 
+#include <linux/sched.h>
+#include <linux/ktime.h>
+
 #include <uapi/linux/futex.h>
 
 struct inode;
@@ -56,11 +59,6 @@ union futex_key {
 #define FUTEX_KEY_INIT (union futex_key) { .both = { .ptr = 0ULL } }
 
 #ifdef CONFIG_FUTEX
-enum {
-	FUTEX_STATE_OK,
-	FUTEX_STATE_EXITING,
-	FUTEX_STATE_DEAD,
-};
 
 static inline void futex_init_task(struct task_struct *tsk)
 {
@@ -76,6 +74,7 @@ static inline void futex_init_task(struct task_struct *tsk)
 void futex_exit_recursive(struct task_struct *tsk);
 void futex_exit_release(struct task_struct *tsk);
 void futex_exec_release(struct task_struct *tsk);
+void futex_mm_release(struct task_struct *tsk);
 
 long do_futex(u32 __user *uaddr, int op, u32 val, ktime_t *timeout,
 	      u32 __user *uaddr2, u32 val2, u32 val3);
@@ -84,5 +83,6 @@ static inline void futex_init_task(struct task_struct *tsk) { }
 static inline void futex_exit_recursive(struct task_struct *tsk) { }
 static inline void futex_exit_release(struct task_struct *tsk) { }
 static inline void futex_exec_release(struct task_struct *tsk) { }
+static inline void futex_mm_release(struct task_struct *tsk) { }
 #endif
 #endif
