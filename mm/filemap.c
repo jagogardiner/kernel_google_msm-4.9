@@ -863,6 +863,13 @@ void wake_up_page_bit(struct page *page, int bit_nr)
 }
 EXPORT_SYMBOL(wake_up_page_bit);
 
+static void wake_up_page(struct page *page, int bit)
+{
+	if (!PageWaiters(page))
+		return;
+	wake_up_page_bit(page, bit);
+}
+
 static inline __sched int wait_on_page_bit_common(wait_queue_head_t *q,
 		struct page *page, int bit_nr, int state, bool lock)
 {

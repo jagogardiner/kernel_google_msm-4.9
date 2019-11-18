@@ -6,6 +6,7 @@
 #include <linux/list.h>
 #include <linux/stddef.h>
 #include <linux/spinlock.h>
+#include <linux/sched/debug.h>
 
 #include <asm/current.h>
 #include <uapi/linux/wait.h>
@@ -978,20 +979,19 @@ do {									\
 /*
  * Waitqueues which are removed from the waitqueue_head at wakeup time
  */
-void prepare_to_wait(wait_queue_head_t *q, wait_queue_t *wait, int state);
-void prepare_to_wait_exclusive(wait_queue_head_t *q, wait_queue_t *wait, int state);
-long prepare_to_wait_event(wait_queue_head_t *q, wait_queue_t *wait, int state);
-void finish_wait(wait_queue_head_t *q, wait_queue_t *wait);
-long wait_woken(wait_queue_t *wait, unsigned mode, long timeout);
-int woken_wake_function(wait_queue_t *wait, unsigned mode, int sync, void *key);
-int autoremove_wake_function(wait_queue_t *wait, unsigned mode, int sync, void *key);
-int wake_bit_function(wait_queue_t *wait, unsigned mode, int sync, void *key);
+void prepare_to_wait(struct wait_queue_head *wq_head, struct wait_queue_entry *wq_entry, int state);
+void prepare_to_wait_exclusive(struct wait_queue_head *wq_head, struct wait_queue_entry *wq_entry, int state);
+long prepare_to_wait_event(struct wait_queue_head *wq_head, struct wait_queue_entry *wq_entry, int state);
+void finish_wait(struct wait_queue_head *wq_head, struct wait_queue_entry *wq_entry);
+long __sched wait_woken(struct wait_queue_entry *wq_entry, unsigned mode, long timeout);
+int __sched woken_wake_function(struct wait_queue_entry *wq_entry, unsigned mode, int sync, void *key);
+int __sched autoremove_wake_function(struct wait_queue_entry *wq_entry, unsigned mode, int sync, void *key);
 
-#define DEFINE_WAIT_FUNC(name, function)				\
-	wait_queue_t name = {						\
-		.private	= current,				\
-		.func		= function,				\
-		.task_list	= LIST_HEAD_INIT((name).task_list),	\
+#define DEFINE_WAIT_FUNC(name, function)					\
+	struct wait_queue_entry name = {					\
+		.private	= current,					\
+		.func		= function,					\
+		.entry		= LIST_HEAD_INIT((name).entry),			\
 	}
 
 #define DEFINE_WAIT(name) DEFINE_WAIT_FUNC(name, autoremove_wake_function)
