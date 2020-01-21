@@ -6450,8 +6450,7 @@ static inline bool task_fits_max(struct task_struct *p, int cpu)
 	if (capacity == max_capacity)
 		return true;
 
-	if (sched_boost_policy() == SCHED_BOOST_ON_BIG &&
-			is_min_capacity_cpu(cpu))
+	if (sched_boost_policy() == SCHED_BOOST_ON_BIG)
 		return false;
 
 	return __task_fits(p, cpu, 0);
