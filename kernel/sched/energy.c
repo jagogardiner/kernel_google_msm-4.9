@@ -302,7 +302,6 @@ static int sched_energy_probe(struct platform_device *pdev)
 		rebuild_sched_domains();
 		update_topology = 0;
 
-		walt_sched_energy_populated_callback();
 	}
 
 	dev_info(&pdev->dev, "Sched-energy-costs capacity updated\n");
