@@ -27,23 +27,6 @@ extern unsigned int sysctl_sched_cstate_aware;
 extern unsigned int sysctl_sched_capacity_margin;
 extern unsigned int sysctl_sched_capacity_margin_down;
 
-#ifdef CONFIG_SCHED_WALT
-extern unsigned int sysctl_sched_init_task_load_pct;
-extern unsigned int sysctl_sched_cpu_high_irqload;
-extern unsigned int sysctl_sched_use_walt_cpu_util;
-extern unsigned int sysctl_sched_use_walt_task_util;
-extern unsigned int sysctl_sched_boost;
-extern unsigned int sysctl_sched_group_upmigrate_pct;
-extern unsigned int sysctl_sched_group_downmigrate_pct;
-extern unsigned int sysctl_sched_walt_rotate_big_tasks;
-
-extern int
-walt_proc_update_handler(struct ctl_table *table, int write,
-			 void __user *buffer, size_t *lenp,
-			 loff_t *ppos);
-
-#endif /* CONFIG_SCHED_WALT */
-
 #if defined(CONFIG_PREEMPT_TRACER) || defined(CONFIG_IRQSOFF_TRACER)
 extern unsigned int sysctl_preemptoff_tracing_threshold_ns;
 extern unsigned int sysctl_irqsoff_tracing_threshold_ns;
@@ -93,22 +76,6 @@ extern int sysctl_sched_rt_runtime;
 
 #ifdef CONFIG_CFS_BANDWIDTH
 extern unsigned int sysctl_sched_cfs_bandwidth_slice;
-#endif
-
-#ifdef CONFIG_SCHED_TUNE
-extern unsigned int sysctl_sched_cfs_boost;
-int sysctl_sched_cfs_boost_handler(struct ctl_table *table, int write,
-				   void __user *buffer, size_t *length,
-				   loff_t *ppos);
-static inline unsigned int get_sysctl_sched_cfs_boost(void)
-{
-	return sysctl_sched_cfs_boost;
-}
-#else
-static inline unsigned int get_sysctl_sched_cfs_boost(void)
-{
-	return 0;
-}
 #endif
 
 #ifdef CONFIG_SCHED_AUTOGROUP
