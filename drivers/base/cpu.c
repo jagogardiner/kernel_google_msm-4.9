@@ -537,6 +537,7 @@ EXPORT_SYMBOL_GPL(cpu_device_create);
 static DEVICE_ATTR(modalias, 0444, print_cpu_modalias, NULL);
 #endif
 
+
 static struct attribute *cpu_root_attrs[] = {
 #ifdef CONFIG_ARCH_CPU_PROBE_RELEASE
 	&dev_attr_probe.attr,
@@ -548,7 +549,6 @@ static struct attribute *cpu_root_attrs[] = {
 	&cpu_attrs[3].attr.attr,
 	&dev_attr_kernel_max.attr,
 	&dev_attr_offline.attr,
-	&dev_attr_isolated.attr,
 #ifdef CONFIG_NO_HZ_FULL
 	&dev_attr_nohz_full.attr,
 #endif
