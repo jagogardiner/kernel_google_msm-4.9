@@ -766,6 +766,16 @@ static struct bio *f2fs_grab_read_bio(struct inode *inode, block_t blkaddr,
 	return bio;
 }
 
+static void f2fs_release_read_bio(struct bio *bio)
+{
+	if (bio->bi_alloc_ts)
+		mm_event_end(F2FS_READ_DATA, bio->bi_alloc_ts);
+
+	if (bio->bi_private)
+		mempool_free(bio->bi_private, bio_post_read_ctx_pool);
+	bio_put(bio);
+}
+
 /* This can handle encryption stuffs */
 static int f2fs_submit_page_read(struct inode *inode, struct page *page,
 				 block_t blkaddr, int flags)
@@ -1823,6 +1833,157 @@ out:
 	*bio_ret = bio;
 	return ret;
 }
+
+#ifdef CONFIG_F2FS_FS_COMPRESSION
+int f2fs_read_multi_pages(struct compress_ctx *cc, struct bio **bio_ret,
+				unsigned nr_pages, sector_t *last_block_in_bio,
+				bool is_readahead)
+{
+	struct dnode_of_data dn;
+	struct inode *inode = cc->inode;
+	struct f2fs_sb_info *sbi = F2FS_I_SB(inode);
+	struct bio *bio = *bio_ret;
+	unsigned int start_idx = cc->cluster_idx << cc->log_cluster_size;
+	sector_t last_block_in_file;
+	const unsigned blkbits = inode->i_blkbits;
+	const unsigned blocksize = 1 << blkbits;
+	struct decompress_io_ctx *dic = NULL;
+	bool bio_encrypted;
+	u64 dun;
+	int i;
+	int ret = 0;
+
+	f2fs_bug_on(sbi, f2fs_cluster_is_empty(cc));
+
+	last_block_in_file = (i_size_read(inode) + blocksize - 1) >> blkbits;
+
+	/* get rid of pages beyond EOF */
+	for (i = 0; i < cc->cluster_size; i++) {
+		struct page *page = cc->rpages[i];
+
+		if (!page)
+			continue;
+		if ((sector_t)page->index >= last_block_in_file) {
+			zero_user_segment(page, 0, PAGE_SIZE);
+			if (!PageUptodate(page))
+				SetPageUptodate(page);
+		} else if (!PageUptodate(page)) {
+			continue;
+		}
+		unlock_page(page);
+		cc->rpages[i] = NULL;
+		cc->nr_rpages--;
+	}
+
+	/* we are done since all pages are beyond EOF */
+	if (f2fs_cluster_is_empty(cc))
+		goto out;
+
+	set_new_dnode(&dn, inode, NULL, NULL, 0);
+	ret = f2fs_get_dnode_of_data(&dn, start_idx, LOOKUP_NODE);
+	if (ret)
+		goto out;
+
+	/* cluster was overwritten as normal cluster */
+	if (dn.data_blkaddr != COMPRESS_ADDR)
+		goto out;
+
+	for (i = 1; i < cc->cluster_size; i++) {
+		block_t blkaddr;
+
+		blkaddr = datablock_addr(dn.inode, dn.node_page,
+						dn.ofs_in_node + i);
+
+		if (!__is_valid_data_blkaddr(blkaddr))
+			break;
+
+		if (!f2fs_is_valid_blkaddr(sbi, blkaddr, DATA_GENERIC)) {
+			ret = -EFAULT;
+			goto out_put_dnode;
+		}
+		cc->nr_cpages++;
+	}
+
+	/* nothing to decompress */
+	if (cc->nr_cpages == 0) {
+		ret = 0;
+		goto out_put_dnode;
+	}
+
+	dic = f2fs_alloc_dic(cc);
+	if (IS_ERR(dic)) {
+		ret = PTR_ERR(dic);
+		goto out_put_dnode;
+	}
+
+	for (i = 0; i < dic->nr_cpages; i++) {
+		struct page *page = dic->cpages[i];
+		block_t blkaddr;
+
+		blkaddr = datablock_addr(dn.inode, dn.node_page,
+						dn.ofs_in_node + i + 1);
+
+		if (bio && !page_is_mergeable(sbi, bio,
+					*last_block_in_bio, blkaddr)) {
+submit_and_realloc:
+			__f2fs_submit_read_bio(sbi, bio, DATA);
+			bio = NULL;
+		}
+
+		dun = PG_DUN(inode, page);
+		bio_encrypted = f2fs_may_encrypt_bio(inode, NULL);
+		if (!fscrypt_mergeable_bio(bio, dun, bio_encrypted, 0)) {
+			__f2fs_submit_read_bio(sbi, bio, DATA);
+			bio = NULL;
+		}
+
+		if (!bio) {
+			bio = f2fs_grab_read_bio(inode, blkaddr, nr_pages,
+					is_readahead ? REQ_RAHEAD : 0,
+					page->index);
+			if (IS_ERR(bio)) {
+				ret = PTR_ERR(bio);
+				bio = NULL;
+				dic->failed = true;
+				if (refcount_sub_and_test(dic->nr_cpages - i,
+							&dic->ref))
+					f2fs_decompress_end_io(dic->rpages,
+							cc->cluster_size, true,
+							false);
+				f2fs_free_dic(dic);
+				f2fs_put_dnode(&dn);
+				*bio_ret = bio;
+				return ret;
+			}
+			if (!for_write)
+				mm_event_start(&bio->bi_alloc_ts);
+			if (bio_encrypted)
+				fscrypt_set_ice_dun(inode, bio, dun);
+		}
+
+		f2fs_wait_on_block_writeback(inode, blkaddr);
+
+		if (bio_add_page(bio, page, blocksize, 0) < blocksize)
+			goto submit_and_realloc;
+
+		inc_page_count(sbi, F2FS_RD_DATA);
+		ClearPageError(page);
+		*last_block_in_bio = blkaddr;
+	}
+
+	f2fs_put_dnode(&dn);
+
+	*bio_ret = bio;
+	return 0;
+
+out_put_dnode:
+	f2fs_put_dnode(&dn);
+out:
+	f2fs_decompress_end_io(cc->rpages, cc->cluster_size, true, false);
+	*bio_ret = bio;
+	return ret;
+}
+#endif
 
 /*
  * This function was originally taken from fs/mpage.c, and customized for f2fs.

@@ -2576,19 +2576,6 @@ extern void make_bad_inode(struct inode *);
 extern bool is_bad_inode(struct inode *);
 
 #ifdef CONFIG_BLOCK
-static inline bool op_is_write(unsigned int op)
-{
-	return op == REQ_OP_READ ? false : true;
-}
-
-/*
- * return data direction, READ or WRITE
- */
-static inline int bio_data_dir(struct bio *bio)
-{
-	return op_is_write(bio_op(bio)) ? WRITE : READ;
-}
-
 extern void check_disk_size_change(struct gendisk *disk,
 				   struct block_device *bdev);
 extern int revalidate_disk(struct gendisk *);
