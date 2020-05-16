@@ -304,6 +304,7 @@ static int sched_energy_probe(struct platform_device *pdev)
 
 	}
 
+
 	dev_info(&pdev->dev, "Sched-energy-costs capacity updated\n");
 	return 0;
 

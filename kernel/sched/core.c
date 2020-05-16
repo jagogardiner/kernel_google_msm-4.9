@@ -79,10 +79,8 @@
 #include <linux/prefetch.h>
 #include <linux/cpufreq_times.h>
 #include <linux/sched/loadavg.h>
-#include <linux/scs.h>
 #include <linux/cgroup-defs.h>
 #include <linux/mutex.h>
-#include <linux/jump_label.h>
 #include <linux/sched/isolation.h>
 #include <linux/sched.h>
 #include <linux/sched/clock.h>
@@ -3210,7 +3208,6 @@ void scheduler_tick(void)
 	update_thermal_load_avg(rq_clock_task(rq), rq, thermal_pressure);
 	curr->sched_class->task_tick(rq, curr, 0);
 	calc_global_load_tick(rq);
-	psi_task_tick(rq);
 
 	psi_task_tick(rq);
 
@@ -3715,7 +3712,6 @@ static void __sched notrace __schedule(bool preempt)
 	clear_tsk_need_resched(prev);
 	clear_preempt_need_resched();
 
-	wallclock = ktime_get_ns();
 	if (likely(prev != next)) {
 		rq->nr_switches++;
 		rq->curr = next;
@@ -4280,6 +4276,8 @@ static void __setscheduler_params(struct task_struct *p,
 
 	if (policy == SETPARAM_POLICY)
 		policy = p->policy;
+	else
+		policy &= ~SCHED_RESET_ON_FORK;
 
 	p->policy = policy;
 
@@ -4352,6 +4350,7 @@ static int __sched_setscheduler(struct task_struct *p,
 
 	/* The pi code expects interrupts enabled */
 	BUG_ON(pi && in_interrupt());
+
 recheck:
 	/* double check policy once rq lock held */
 	if (policy < 0) {
@@ -5564,22 +5563,16 @@ void init_idle_bootup_task(struct task_struct *idle)
  * init_idle - set up an idle thread for a given CPU
  * @idle: task in question
  * @cpu: cpu the idle task belongs to
- * @cpu_up: differentiate between initial boot vs hotplug
  *
  * NOTE: this function does not set the idle thread's NEED_RESCHED
  * flag, to make booting more robust.
  */
-void init_idle(struct task_struct *idle, int cpu, bool cpu_up)
+void init_idle(struct task_struct *idle, int cpu)
 {
 	struct rq *rq = cpu_rq(cpu);
 	unsigned long flags;
 
-	scs_task_reset(idle);
-
 	__sched_fork(0, idle);
-
-	if (!cpu_up)
-		init_new_task_load(idle, true);
 
 	raw_spin_lock_irqsave(&idle->pi_lock, flags);
 	raw_spin_lock(&rq->lock);
