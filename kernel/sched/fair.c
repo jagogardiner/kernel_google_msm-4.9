@@ -7630,26 +7630,6 @@ static inline int find_best_target(struct task_struct *p, int *backup_cpu,
 		!(p->state == TASK_RUNNING && !idle_cpu(most_spare_cap_cpu)))
 		target_cpu = most_spare_cap_cpu;
 
-	if (target_cpu == -1 && isolated_candidate != -1) {
-		target_cpu = isolated_candidate;
-	}
-
-	/*
-	 * - It is possible for target and backup
-	 *   to select same CPU - if so, drop backup
-	 *
-	 * - The next step of energy evaluation includes
-	 *   prev_cpu. Drop target or backup if it is
-	 *   same as prev_cpu.
-	 */
-	if (*backup_cpu == target_cpu || *backup_cpu == prev_cpu)
-		*backup_cpu = -1;
-
-	if (target_cpu == prev_cpu) {
-		target_cpu = *backup_cpu;
-		*backup_cpu = -1;
-	}
-
 	trace_sched_find_best_target(p, prefer_idle, min_util, cpu,
 				     best_idle_cpu, best_active_cpu,
 				     target_cpu);
@@ -7718,7 +7698,7 @@ cpu_is_in_target_set(struct task_struct *p, int cpu)
 {
 	bool boosted = task_is_boosted(p);
 
-	int first_cpu = start_cpu(p, boosted, NULL);
+	int first_cpu = start_cpu(boosted);
 	int next_usable_cpu = cpumask_next(first_cpu - 1, tsk_cpus_allowed(p));
 	return cpu >= next_usable_cpu || next_usable_cpu >= nr_cpu_ids;
 }
@@ -7977,7 +7957,7 @@ select_task_rq_fair(struct task_struct *p, int prev_cpu, int sd_flag, int wake_f
 		 * that the selection algorithm for a boosted task
 		 * should be used.
 		 */
-		bool sync_boost = sync && cpu >= start_cpu(p, boosted, NULL);
+		bool sync_boost = sync && cpu >= start_cpu(boosted);
 		return select_energy_cpu_brute(p, prev_cpu, sync_boost);
 	}
 
@@ -10848,15 +10828,6 @@ static int idle_balance(struct rq *this_rq, struct rq_flags *rf)
 	 */
 	if (!cpu_active(this_cpu))
 		return 0;
-
-	/*
-	 * Force higher capacity CPUs doing load balance, when the lower
-	 * capacity CPUs has some misfit tasks.
-	 */
-	if (!is_min_capacity_cpu(this_cpu) &&
-		(atomic_read(&this_rq->nr_iowait) == 0) &&
-		min_cap_cluster_has_misfit_task())
-		force_lb = true;
 
 	/*
 	 * We must set idle_stamp _before_ calling idle_balance(), such that we
