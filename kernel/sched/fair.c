@@ -7245,8 +7245,6 @@ static inline int find_best_target(struct task_struct *p, int *backup_cpu,
 	long spare_wake_cap, most_spare_wake_cap = 0;
 	int most_spare_cap_cpu = -1;
 	unsigned int active_cpus_count = 0;
-	int isolated_candidate = -1;
-	int prev_cpu = task_cpu(p);
 	struct task_struct *curr_tsk;
 
 	*backup_cpu = -1;
