@@ -291,10 +291,6 @@ static int sched_energy_probe(struct platform_device *pdev)
 			WRITE_ONCE(rq->rd->min_cap_orig_cpu, cpu);
 	}
 
-	kfree(max_frequencies);
-
-	if (is_sge_valid)
-		walt_sched_energy_populated_callback();
 	dev_info(&pdev->dev, "Sched-energy-costs capacity updated\n");
 	return 0;
 
