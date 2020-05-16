@@ -1,4 +1,4 @@
-)/*
+/*
  * jump label support
  *
  * Copyright (C) 2009 Jason Baron <jbaron@redhat.com>

@@ -49,15 +49,6 @@ out: \
 	return cnt; \
 }
 
-show_table_attr(power);
-show_table_attr(frequency);
-show_table_attr(cost);
-
-static ssize_t show_cpus(struct em_perf_domain *pd, char *buf)
-{
-	return sprintf(buf, "%*pbl\n", cpumask_pr_args(to_cpumask(pd->cpus)));
-}
-
 #define pd_attr(_name) em_pd_##_name##_attr
 #define define_pd_attr(_name) static struct em_pd_attr pd_attr(_name) = \
 		__ATTR(_name, 0444, show_##_name, NULL)
