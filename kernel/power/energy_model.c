@@ -93,11 +93,6 @@ static const struct sysfs_ops em_pd_sysfs_ops = {
 	.show	= show,
 };
 
-static struct kobj_type ktype_em_pd = {
-	.sysfs_ops	= &em_pd_sysfs_ops,
-	.default_attrs	= em_pd_default_attrs,
-};
-
 static struct em_perf_domain *em_create_pd(cpumask_t *span, int nr_states,
 						struct em_data_callback *cb)
 {

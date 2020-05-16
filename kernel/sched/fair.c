@@ -5256,9 +5256,6 @@ enqueue_task_fair(struct rq *rq, struct task_struct *p, int flags)
 	struct cfs_rq *cfs_rq;
 	struct sched_entity *se = &p->se;
 	int idle_h_nr_running = idle_policy(p->policy);
-#ifdef CONFIG_SMP
-	int task_new = flags & ENQUEUE_WAKEUP_NEW;
-#endif
 
 #ifdef CONFIG_SCHED_WALT
 	p->misfit = !task_fits_max(p, rq->cpu);
@@ -8008,7 +8005,6 @@ static int select_energy_cpu_brute(struct task_struct *p, int prev_cpu,
 
 	target_cpu = prev_cpu;
 	if (next_cpu != prev_cpu) {
-		int delta = 0;
 		struct energy_env eenv = {
 			.p              = p,
 			.util_delta     = task_util_est(p),
@@ -8327,8 +8323,6 @@ select_task_rq_fair(struct task_struct *p, int prev_cpu, int sd_flag, int wake_f
 	int new_cpu = prev_cpu;
 	int want_affine = 0;
 	int sync = (wake_flags & WF_SYNC) && !(current->flags & PF_EXITING);
-
-	bool boosted = task_is_boosted(p);
 
 	if (sd_flag & SD_BALANCE_WAKE) {
 
@@ -9756,7 +9750,6 @@ void update_group_capacity(struct sched_domain *sd, int cpu)
 		 */
 
 		for_each_cpu(cpu, sched_group_cpus(sdg)) {
-			unsigned long cpu_cap = capacity_of(cpu);
 
 			if (cpumask_test_cpu(cpu, cpu_isolated_mask))
 				continue;
@@ -9773,7 +9766,6 @@ void update_group_capacity(struct sched_domain *sd, int cpu)
 		group = child->groups;
 		do {
 			struct sched_group_capacity *sgc = group->sgc;
-			cpumask_t *cpus = sched_group_cpus(group);
 
 			capacity += sgc->capacity;
 			min_capacity = min(sgc->min_capacity, min_capacity);
