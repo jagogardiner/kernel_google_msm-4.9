@@ -5834,6 +5834,7 @@ static unsigned long __cpu_norm_util(unsigned long util, unsigned long capacity)
 static unsigned long cpu_util_wake(int cpu, struct task_struct *p)
 {
 	unsigned int util;
+        struct cfs_rq *cfs_rq;
 
 #ifdef CONFIG_SCHED_WALT
 	/*
@@ -5854,7 +5855,6 @@ static unsigned long cpu_util_wake(int cpu, struct task_struct *p)
 #ifdef CONFIG_SCHED_WALT
 	util = max_t(long, cpu_util(cpu) - task_util(p), 0);
 #else
-	struct cfs_rq *cfs_rq;
 
 	cfs_rq = &cpu_rq(cpu)->cfs;
 	util = READ_ONCE(cfs_rq->avg.util_avg);
@@ -7233,12 +7233,6 @@ retry:
 			 */
 			wake_util = cpu_util_wake(i, p);
 			new_util = wake_util + task_util_est(p);
-			spare_cap = capacity_orig_of(i) - wake_util;
-
-			if (spare_cap > most_spare_cap) {
-				most_spare_cap = spare_cap;
-				most_spare_cap_cpu = i;
-			}
 
 			/*
 			 * Ensure minimum capacity to grant the required boost.
@@ -7462,7 +7456,7 @@ retry:
 
 		trace_sched_find_best_target(p, prefer_idle, min_util, cpu,
 					     best_idle_cpu, best_active_cpu,
-					     best_idle_cpu, -1);
+					     best_idle_cpu);
 		return best_idle_cpu;
 	}
 
