@@ -39,6 +39,7 @@ struct cpuidle_state;
 extern __read_mostly bool sched_predl;
 extern unsigned int sched_smp_overlap_capacity;
 
+
 /* task_struct::on_rq states: */
 #define TASK_ON_RQ_QUEUED	1
 #define TASK_ON_RQ_MIGRATING	2
@@ -444,6 +445,8 @@ static inline void set_task_rq_fair(struct sched_entity *se,
 #endif /* CONFIG_SMP */
 #endif /* CONFIG_FAIR_GROUP_SCHED */
 
+extern struct task_group *css_tg(struct cgroup_subsys_state *css);
+
 #else /* CONFIG_CGROUP_SCHED */
 
 struct cfs_bandwidth { };
@@ -463,8 +466,7 @@ struct cfs_rq {
 	u64 min_vruntime_copy;
 #endif
 
-	struct rb_root tasks_timeline;
-	struct rb_node *rb_leftmost;
+	struct rb_root_cached tasks_timeline;
 
 	/*
 	 * 'curr' points to currently running entity on this cfs_rq.
