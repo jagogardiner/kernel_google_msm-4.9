@@ -62,11 +62,6 @@ static ssize_t show_cpus(struct em_perf_domain *pd, char *buf)
 #define define_pd_attr(_name) static struct em_pd_attr pd_attr(_name) = \
 		__ATTR(_name, 0444, show_##_name, NULL)
 
-define_pd_attr(power);
-define_pd_attr(frequency);
-define_pd_attr(cost);
-define_pd_attr(cpus);
-
 #define to_pd(k) container_of(k, struct em_perf_domain, kobj)
 #define to_pd_attr(a) container_of(a, struct em_pd_attr, attr)
 

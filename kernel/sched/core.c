@@ -81,6 +81,7 @@
 #include <linux/scs.h>
 #include <linux/cgroup-defs.h>
 #include <linux/mutex.h>
+#include <linux/jump_label.h>
 
 #include <asm/switch_to.h>
 #include <asm/tlb.h>
