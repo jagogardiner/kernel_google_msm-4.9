@@ -7292,9 +7292,6 @@ static inline int find_best_target(struct task_struct *p, int *backup_cpu,
 			if (!cpu_online(i) || cpu_isolated(i))
 				continue;
 
-			if (isolated_candidate == -1)
-				isolated_candidate = i;
-
 			if (walt_cpu_high_irqload(i))
 				continue;
 
@@ -7459,12 +7456,6 @@ static inline int find_best_target(struct task_struct *p, int *backup_cpu,
 				    best_idle_cstate < idle_idx)
 					continue;
 
-				if (best_idle_cstate == idle_idx &&
-					(best_idle_cpu == prev_cpu ||
-					(i != prev_cpu &&
-					new_util_cuml > best_idle_cuml_util)))
-					continue;
-
 				/* Keep track of best idle CPU */
 				target_capacity = capacity_orig;
 				best_idle_cstate = idle_idx;
@@ -7541,7 +7532,7 @@ static inline int find_best_target(struct task_struct *p, int *backup_cpu,
 	}
 
 	if (best_idle_cpu != -1 && !is_packing_eligible(p, target_cpu, fbt_env,
-					active_cpus_count, best_idle_cstate, boosted)) {
+					active_cpus_count, best_idle_cstate)) {
 
 		target_cpu = best_idle_cpu;
 		best_idle_cpu = -1;
@@ -7575,32 +7566,6 @@ static inline int find_best_target(struct task_struct *p, int *backup_cpu,
 		*backup_cpu = prefer_idle
 		? best_active_cpu
 		: best_idle_cpu;
-
-	if (target_cpu == -1 && most_spare_cap_cpu != -1 &&
-		/* ensure we use active cpu for active migration */
-		!(p->state == TASK_RUNNING && !idle_cpu(most_spare_cap_cpu)))
-		target_cpu = most_spare_cap_cpu;
-
-	if (cpu_isolated(prev_cpu)) {
-		if (target_cpu == -1 && isolated_candidate != -1)
-			target_cpu = isolated_candidate;
-	}
-
-	/*
-	 * - It is possible for target and backup
-	 *   to select same CPU - if so, drop backup
-	 *
-	 * - The next step of energy evaluation includes
-	 *   prev_cpu. Drop target or backup if it is
-	 *   same as prev_cpu.
-	 */
-	if (*backup_cpu == target_cpu || *backup_cpu == prev_cpu)
-		*backup_cpu = -1;
-
-	if (target_cpu == prev_cpu) {
-		target_cpu = *backup_cpu;
-		*backup_cpu = -1;
-	}
 
 	trace_sched_find_best_target(p, prefer_idle, min_util, cpu,
 				     best_idle_cpu, best_active_cpu,
@@ -7779,7 +7744,9 @@ static int select_energy_cpu_brute(struct task_struct *p, int prev_cpu,
 		fbt_env.need_idle = wake_to_idle(p);
 	}
 
-	fbt_env.placement_boost = task_boost_policy(p);
+	fbt_env.placement_boost = task_sched_boost(p) ?
+				  sched_boost_policy() != SCHED_BOOST_NONE :
+				  false;
 
 	if (bias_to_prev_cpu(p, rtg_target)) {
 		target_cpu = prev_cpu;
