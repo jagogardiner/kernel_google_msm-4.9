@@ -67,14 +67,6 @@ define_pd_attr(frequency);
 define_pd_attr(cost);
 define_pd_attr(cpus);
 
-static struct attribute *em_pd_default_attrs[] = {
-	&pd_attr(power).attr,
-	&pd_attr(frequency).attr,
-	&pd_attr(cost).attr,
-	&pd_attr(cpus).attr,
-	NULL
-};
-
 #define to_pd(k) container_of(k, struct em_perf_domain, kobj)
 #define to_pd_attr(a) container_of(a, struct em_pd_attr, attr)
 
