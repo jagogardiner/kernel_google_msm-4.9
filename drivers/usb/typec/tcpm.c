@@ -31,6 +31,7 @@
 #include <linux/usb/tcpm.h>
 #include <linux/usb/typec.h>
 #include <linux/workqueue.h>
+#include <linux/sched/clock.h>
 
 #define FOREACH_STATE(S)			\
 	S(INVALID_STATE),			\
