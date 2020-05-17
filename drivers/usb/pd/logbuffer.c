@@ -23,6 +23,7 @@
 #include <linux/slab.h>
 #include <linux/syscore_ops.h>
 #include <linux/vmalloc.h>
+#include <linux/sched/clock.h>
 
 #define LOG_BUFFER_ENTRIES      1024
 #define LOG_BUFFER_ENTRY_SIZE   256
