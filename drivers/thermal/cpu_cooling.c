@@ -248,13 +248,6 @@ static int cpufreq_cooling_pm_notify(struct notifier_block *nb,
 				 * deadlock with hotplug path.
 				 */
 				mutex_unlock(&core_isolate_lock);
-				if (cpu_online(cpu) &&
-					!cpumask_test_and_set_cpu(cpu,
-					&cpus_isolated_by_thermal)) {
-					if (sched_isolate_cpu(cpu))
-						cpumask_clear_cpu(cpu,
-						&cpus_isolated_by_thermal);
-				}
 				continue;
 			}
 			mutex_unlock(&core_isolate_lock);
@@ -281,13 +274,6 @@ static int cpufreq_hp_offline(unsigned int offline_cpu)
 	list_for_each_entry(cpufreq_dev, &cpufreq_dev_list, node) {
 		if (!cpumask_test_cpu(offline_cpu, &cpufreq_dev->allowed_cpus))
 			continue;
-
-		mutex_lock(&core_isolate_lock);
-		if ((cpufreq_dev->cpufreq_state == cpufreq_dev->max_level) &&
-			(cpumask_test_and_clear_cpu(offline_cpu,
-			&cpus_isolated_by_thermal)))
-			sched_unisolate_cpu_unlocked(offline_cpu);
-		mutex_unlock(&core_isolate_lock);
 		break;
 	}
 	mutex_unlock(&cooling_list_lock);
@@ -713,8 +699,6 @@ static int cpufreq_set_cur_state(struct thermal_cooling_device *cdev,
 	unsigned int cpu = cpumask_any(&cpufreq_device->allowed_cpus);
 	unsigned int clip_freq;
 	unsigned long prev_state;
-	struct device *cpu_dev;
-	int ret = 0;
 
 	/* Request state should be less than max_level */
 	if (WARN_ON(state > cpufreq_device->max_level))
@@ -728,30 +712,6 @@ static int cpufreq_set_cur_state(struct thermal_cooling_device *cdev,
 	prev_state = cpufreq_device->cpufreq_state;
 	cpufreq_device->cpufreq_state = state;
 	mutex_unlock(&core_isolate_lock);
-	/* If state is the last, isolate the CPU */
-	if (state == cpufreq_device->max_level) {
-		if (cpu_online(cpu) &&
-			(!cpumask_test_and_set_cpu(cpu,
-			&cpus_isolated_by_thermal))) {
-			if (sched_isolate_cpu(cpu))
-				cpumask_clear_cpu(cpu,
-					&cpus_isolated_by_thermal);
-		}
-		return ret;
-	} else if ((prev_state == cpufreq_device->max_level)
-			&& (state < cpufreq_device->max_level)) {
-		if (cpumask_test_and_clear_cpu(cpu, &cpus_pending_online)) {
-			cpu_dev = get_cpu_device(cpu);
-			ret = device_online(cpu_dev);
-			if (ret)
-				pr_err("CPU:%d online error:%d\n", cpu, ret);
-			goto update_frequency;
-		} else if (cpumask_test_and_clear_cpu(cpu,
-			&cpus_isolated_by_thermal)) {
-			sched_unisolate_cpu(cpu);
-		}
-	}
-update_frequency:
 	clip_freq = cpufreq_device->freq_table[state];
 	cpufreq_device->clipped_freq = clip_freq;
 
