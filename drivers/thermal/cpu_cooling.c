@@ -712,9 +712,9 @@ static int cpufreq_set_cur_state(struct thermal_cooling_device *cdev,
 	struct cpufreq_cooling_device *cpufreq_device = cdev->devdata;
 	unsigned int cpu = cpumask_any(&cpufreq_device->allowed_cpus);
 	unsigned int clip_freq;
-	struct cpumask *cpus;
-	unsigned int frequency;
-	unsigned long max_capacity, capacity;
+	unsigned long prev_state;
+	struct device *cpu_dev;
+	int ret = 0;
 
 	/* Request state should be less than max_level */
 	if (WARN_ON(state > cpufreq_device->max_level))
@@ -766,13 +766,6 @@ update_frequency:
 	} else {
 		cpufreq_update_policy(cpu);
 	}
-
-	frequency = get_state_freq(cpufreq_cdev, state);
-	cpus = cpufreq_cdev->policy->cpus;
-	max_capacity = arch_scale_cpu_capacity(NULL, cpumask_first(cpus));
-	capacity = frequency * max_capacity;
-	capacity /= cpufreq_cdev->policy->cpuinfo.max_freq;
-	arch_set_thermal_pressure(cpus, max_capacity - capacity);
 
 	return 0;
 }
