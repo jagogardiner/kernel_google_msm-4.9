@@ -72,7 +72,7 @@ enum debug_event {
 };
 
 struct lpm_debug {
-	cycle_t time;
+	cycles_t time;
 	enum debug_event evt;
 	int cpu;
 	uint32_t arg1;
@@ -971,9 +971,6 @@ static int cluster_select(struct lpm_cluster *cluster, bool from_idle,
 		if (!cpumask_equal(&cluster->num_children_in_sync,
 					&level->num_cpu_votes))
 			continue;
-
-		if (from_idle && latency_us <= pwr_params->exit_latency)
-			break;
 
 		if (sleep_us < pwr_params->time_overhead_us)
 			break;

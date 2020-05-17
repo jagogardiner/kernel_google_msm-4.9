@@ -351,6 +351,9 @@ struct module {
 	const unsigned long *crcs;
 	unsigned int num_syms;
 
+        struct jump_entry *jump_entries;
+        unsigned int num_jump_entries;
+
 #ifdef CONFIG_CFI_CLANG
 	cfi_check_fn cfi_check;
 #endif
@@ -439,10 +442,6 @@ struct module {
 #ifdef CONFIG_TRACEPOINTS
 	unsigned int num_tracepoints;
 	struct tracepoint * const *tracepoints_ptrs;
-#endif
-#ifdef HAVE_JUMP_LABEL
-	struct jump_entry *jump_entries;
-	unsigned int num_jump_entries;
 #endif
 #ifdef CONFIG_TREE_SRCU
 	unsigned int num_srcu_structs;
