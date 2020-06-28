@@ -587,6 +587,7 @@ static struct clk_osm *clk_cpu_map[] = {
 	&cpu7_perfcl_clk,
 };
 
+#if CONFIG_BOARD_B1C1
 static bool should_skip(unsigned int freq, int cpu)
 {
 	unsigned int skip_freqs_little[] = { };
@@ -605,6 +606,7 @@ static bool should_skip(unsigned int freq, int cpu)
 
 	return false;
 }
+#endif
 
 static struct clk_osm *logical_cpu_to_clk(int cpu)
 {
@@ -786,20 +788,28 @@ static int osm_cpufreq_cpu_init(struct cpufreq_policy *policy)
 
 	for (i = 0; i < parent->osm_table_size; i++) {
 		u32 data, src, div, lval, core_count;
+#if CONFIG_BOARD_B1C1
 		unsigned int freq;
-
+#endif
 		data = clk_osm_read_reg(c, FREQ_REG + i * OSM_REG_SIZE);
 		src = (data & GENMASK(31, 30)) >> 30;
 		div = (data & GENMASK(29, 28)) >> 28;
 		lval = data & GENMASK(7, 0);
 		core_count = CORE_COUNT_VAL(data);
 
+#if CONFIG_BOARD_B1C1
 		freq = (!src) ? OSM_INIT_RATE / 1000 : (XO_RATE * lval) / 1000;
 
 		if (should_skip(freq, policy->cpu))
 			continue;
 
 		table[i].frequency = freq;
+#else
+		if (!src)
+			table[i].frequency = OSM_INIT_RATE / 1000;
+		else
+			table[i].frequency = xo_kHz * lval;
+#endif
 		table[i].driver_data = table[i].frequency;
 
 		if (core_count != parent->max_core_count)
@@ -1061,7 +1071,9 @@ static int clk_osm_read_lut(struct platform_device *pdev, struct clk_osm *c, int
 	struct clk_vdd_class *vdd = osm_clks_init[c->cluster_num].vdd_class;
 
 	for (i = 0; i < c->osm_table_size; i++) {
+#if CONFIG_BOARD_B1C1
 		unsigned long int freq;
+#endif
 
 		data = clk_osm_read_reg(c, FREQ_REG + i * OSM_REG_SIZE);
 		src = ((data & GENMASK(31, 30)) >> 30);
@@ -1069,12 +1081,19 @@ static int clk_osm_read_lut(struct platform_device *pdev, struct clk_osm *c, int
 		c->osm_table[i].ccount = CORE_COUNT_VAL(data);
 		c->osm_table[i].lval = lval;
 
+#if CONFIG_BOARD_B1C1
 		freq = (!src) ? OSM_INIT_RATE : XO_RATE * lval;
 
 		if (should_skip(freq / 1000, cpu))
 		continue;
 
 		c->osm_table[i].frequency = freq;
+#else
+		if (!src)
+			c->osm_table[i].frequency = OSM_INIT_RATE;
+		else
+			c->osm_table[i].frequency = XO_RATE * lval;
+#endif
 
 		data = clk_osm_read_reg(c, VOLT_REG + i * OSM_REG_SIZE);
 		c->osm_table[i].virtual_corner =
