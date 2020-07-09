@@ -1184,22 +1184,12 @@ void __init adjust_lowmem_bounds(void)
 		}
 	}
 
-#ifdef CONFIG_ENABLE_VMALLOC_SAVING
-	struct memblock_region *prev_reg = NULL;
-
-	for_each_memblock(memory, reg) {
-		if (prev_reg == NULL) {
-			prev_reg = reg;
-			continue;
-		}
-		vmalloc_limit += reg->base - (prev_reg->base + prev_reg->size);
-		prev_reg = reg;
-	}
-#endif
-
 	for_each_memblock(memory, reg) {
 		phys_addr_t block_start = reg->base;
 		phys_addr_t block_end = reg->base + reg->size;
+
+		if (memblock_is_nomap(reg))
+			continue;
 
 		if (reg->base < vmalloc_limit) {
 			if (block_end > lowmem_limit)
