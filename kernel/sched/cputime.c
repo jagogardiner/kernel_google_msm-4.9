@@ -6,10 +6,6 @@
 #include <linux/context_tracking.h>
 #include <linux/cpufreq_times.h>
 #include "sched.h"
-#ifdef CONFIG_PARAVIRT
-#include <asm/paravirt.h>
-#endif
-#include "walt.h"
 
 #ifdef CONFIG_IRQ_TIME_ACCOUNTING
 
@@ -59,15 +55,12 @@ void irqtime_account_irq(struct task_struct *curr)
 	struct irqtime *irqtime = this_cpu_ptr(&cpu_irqtime);
 	s64 delta;
 	int cpu;
-	u64 wallclock;
-	bool account = true;
 
 	if (!sched_clock_irqtime)
 		return;
 
 	cpu = smp_processor_id();
-	wallclock = sched_clock_cpu(cpu);
-	delta = wallclock - irqtime->irq_start_time;
+	delta = sched_clock_cpu(cpu) - irqtime->irq_start_time;
 	irqtime->irq_start_time += delta;
 
 	/*
@@ -80,14 +73,6 @@ void irqtime_account_irq(struct task_struct *curr)
 		irqtime_account_delta(irqtime, delta, CPUTIME_IRQ);
 	else if (in_serving_softirq() && curr != this_cpu_ksoftirqd())
 		irqtime_account_delta(irqtime, delta, CPUTIME_SOFTIRQ);
-	else
-		account = false;
-
-	u64_stats_update_end(&irqtime->sync);
-
-	if (account)
-		walt_account_irqtime(cpu, curr, delta, wallclock);
-#endif
 }
 EXPORT_SYMBOL_GPL(irqtime_account_irq);
 

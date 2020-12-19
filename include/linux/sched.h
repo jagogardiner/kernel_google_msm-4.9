@@ -330,15 +330,6 @@ extern char ___assert_task_state[1 - 2*!!(
 
 extern const char *sched_window_reset_reasons[];
 
-enum task_event {
-	PUT_PREV_TASK   = 0,
-	PICK_NEXT_TASK  = 1,
-	TASK_WAKE       = 2,
-	TASK_MIGRATE    = 3,
-	TASK_UPDATE     = 4,
-	IRQ_UPDATE	= 5,
-};
-
 extern cpumask_var_t			cpu_isolated_map;
 
 extern void cpu_init (void);
@@ -718,43 +709,21 @@ struct signal_struct {
 #endif
 };
 
-#ifdef CONFIG_SCHED_WALT
-#define RAVG_HIST_SIZE_MAX  5
+struct sched_rt_entity {
+	struct list_head		run_list;
+	unsigned long			timeout;
+	unsigned long			watchdog_stamp;
+	unsigned int			time_slice;
+	unsigned short			on_rq;
+	unsigned short			on_list;
 
-/* ravg represents frequency scaled cpu-demand of tasks */
-struct ravg {
-	/*
-	 * 'mark_start' marks the beginning of an event (task waking up, task
-	 * starting to execute, task being preempted) within a window
-	 *
-	 * 'sum' represents how runnable a task has been within current
-	 * window. It incorporates both running time and wait time and is
-	 * frequency scaled.
-	 *
-	 * 'sum_history' keeps track of history of 'sum' seen over previous
-	 * RAVG_HIST_SIZE windows. Windows where task was entirely sleeping are
-	 * ignored.
-	 *
-	 * 'demand' represents maximum sum seen over previous
-	 * sysctl_sched_ravg_hist_size windows. 'demand' could drive frequency
-	 * demand for tasks.
-	 *
-	 * 'curr_window' represents task's contribution to cpu busy time
-	 * statistics (rq->curr_runnable_sum) in current window
-	 *
-	 * 'prev_window' represents task's contribution to cpu busy time
-	 * statistics (rq->prev_runnable_sum) in previous window
-	 */
-	u64 mark_start;
-	u32 sum, demand;
-	u32 sum_history[RAVG_HIST_SIZE_MAX];
-	u32 curr_window, prev_window;
-	u16 active_windows;
-};
-#endif
-
-#ifdef CONFIG_SCHED_AUTOGROUP
-	struct autogroup *autogroup;
+	struct sched_rt_entity		*back;
+#ifdef CONFIG_RT_GROUP_SCHED
+	struct sched_rt_entity		*parent;
+	/* rq on which this entity is (to be) queued: */
+	struct rt_rq			*rt_rq;
+	/* rq "owned" by this entity/group: */
+	struct rt_rq			*my_q;
 #endif
 	/*
 	 * Cumulative resource counters for dead threads in the group,
@@ -876,18 +845,14 @@ struct user_struct {
 	const struct sched_class	*sched_class;
 	struct sched_entity		se;
 	struct sched_rt_entity		rt;
-#ifdef CONFIG_SCHED_WALT
-	struct ravg ravg;
-	/*
-	 * 'init_load_pct' represents the initial task load assigned to children
-	 * of this task
-	 */
-	u32 init_load_pct;
-	u64 last_sleep_ts;
+#ifdef CONFIG_CGROUP_SCHED
+	struct task_group		*sched_task_group;
 #endif
-#ifdef CONFIG_POSIX_MQUEUE
-	/* protected by mq_lock	*/
-	unsigned long mq_bytes;	/* How many bytes can be allocated to mqueue? */
+	struct sched_dl_entity		dl;
+
+#ifdef CONFIG_PREEMPT_NOTIFIERS
+	/* List of struct preempt_notifier: */
+	struct hlist_head		preempt_notifiers;
 #endif
 	unsigned long locked_shm; /* How many pages of mlocked shm ? */
 	unsigned long unix_inflight;	/* How many files in flight in unix sockets */
@@ -905,20 +870,6 @@ struct user_struct {
 #if defined(CONFIG_PERF_EVENTS) || defined(CONFIG_BPF_SYSCALL)
 	atomic_long_t locked_vm;
 #endif
-};
-
-extern int uids_sysfs_init(void);
-
-extern struct user_struct *find_user(kuid_t);
-
-extern struct user_struct root_user;
-#define INIT_USER (&root_user)
-
-
-struct backing_dev_info;
-struct reclaim_state;
-
-#ifdef CONFIG_SCHED_INFO
 struct sched_info {
 	/* cumulative counters */
 	unsigned long pcount;	      /* # of times run on this cpu */
@@ -927,7 +878,6 @@ struct sched_info {
 	/* timestamps */
 	unsigned long long last_arrival,/* when we last ran on a cpu */
 			   last_queued;	/* when we were last queued to run */
-};
 #endif /* CONFIG_SCHED_INFO */
 
 struct task_delay_info;

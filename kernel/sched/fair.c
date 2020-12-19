@@ -34,8 +34,6 @@
 
 #include "sched.h"
 #include "tune.h"
-#include "walt.h"
-#include <trace/events/sched.h>
 
 /*
  * Targeted preemption latency for CPU-bound tasks:
@@ -104,8 +102,7 @@ unsigned int normalized_sysctl_sched_wakeup_granularity	= 1000000UL;
 
 const_debug unsigned int sysctl_sched_migration_cost	= 500000UL;
 
-const_debug unsigned int sysctl_sched_migration_cost = 500000UL;
-
+#ifdef CONFIG_SMP
 /*
  * The exponential sliding  window over which load is averaged for shares
  * distribution.
@@ -1392,7 +1389,6 @@ static unsigned long weighted_cpuload(const int cpu);
 static unsigned long source_load(int cpu, int type);
 static unsigned long target_load(int cpu, int type);
 static unsigned long capacity_of(int cpu);
-static long effective_load(struct task_group *tg, int cpu, long wl, long wg);
 
 /* Cached statistics for all CPUs within a node */
 struct numa_stats {
@@ -2751,7 +2747,25 @@ u32 sched_get_wake_up_idle(struct task_struct *p)
 {
 	u32 enabled = p->flags & PF_WAKE_UP_IDLE;
 
-	return !!enabled;
+	if (&rq->cfs == cfs_rq) {
+		/*
+		 * There are a few boundary cases this might miss but it should
+		 * get called often enough that that should (hopefully) not be
+		 * a real problem -- added to that it only calls on the local
+		 * CPU, so if we enqueue remotely we'll miss an update, but
+		 * the next tick/schedule should update.
+		 *
+		 * It will not get called when we go idle, because the idle
+		 * thread is a different class (!fair), nor will the utilization
+		 * number include things like RT tasks.
+		 *
+		 * As is, the util number is not freq-invariant (we'd have to
+		 * implement arch_scale_freq_capacity() for that).
+		 *
+		 * See cpu_util().
+		 */
+		cpufreq_update_util(rq, 0);
+	}
 }
 EXPORT_SYMBOL(sched_get_wake_up_idle);
 
@@ -4916,13 +4930,8 @@ static inline void update_overutilized_status(struct rq *rq)
 		set_sd_overutilized(sd);
 	rcu_read_unlock();
 }
-
-unsigned long boosted_cpu_util(int cpu);
 #else
-
 #define update_overutilized_status(rq) do {} while (0)
-#define boosted_cpu_util(cpu) cpu_util_freq(cpu)
-
 #endif /* CONFIG_SMP */
 
 /*
@@ -4965,7 +4974,6 @@ enqueue_task_fair(struct rq *rq, struct task_struct *p, int flags)
 		if (cfs_rq_throttled(cfs_rq))
 			break;
 		cfs_rq->h_nr_running++;
-		walt_inc_cfs_cumulative_runnable_avg(cfs_rq, p);
 
 		flags = ENQUEUE_WAKEUP;
 	}
@@ -4973,7 +4981,6 @@ enqueue_task_fair(struct rq *rq, struct task_struct *p, int flags)
 	for_each_sched_entity(se) {
 		cfs_rq = cfs_rq_of(se);
 		cfs_rq->h_nr_running++;
-		walt_inc_cfs_cumulative_runnable_avg(cfs_rq, p);
 
 		if (cfs_rq_throttled(cfs_rq))
 			break;
@@ -5012,10 +5019,7 @@ enqueue_task_fair(struct rq *rq, struct task_struct *p, int flags)
 		add_nr_running(rq, 1);
 		if (!task_new)
 			update_overutilized_status(rq);
-		walt_inc_cumulative_runnable_avg(rq, p);
 	}
-
-#endif /* CONFIG_SMP */
 	hrtick_update(rq);
 }
 
@@ -5045,7 +5049,6 @@ static void dequeue_task_fair(struct rq *rq, struct task_struct *p, int flags)
 		if (cfs_rq_throttled(cfs_rq))
 			break;
 		cfs_rq->h_nr_running--;
-		walt_dec_cfs_cumulative_runnable_avg(cfs_rq, p);
 
 		/* Don't dequeue parent if it has other entities besides us */
 		if (cfs_rq->load.weight) {
@@ -5065,7 +5068,6 @@ static void dequeue_task_fair(struct rq *rq, struct task_struct *p, int flags)
 	for_each_sched_entity(se) {
 		cfs_rq = cfs_rq_of(se);
 		cfs_rq->h_nr_running--;
-		walt_dec_cfs_cumulative_runnable_avg(cfs_rq, p);
 
 		if (cfs_rq_throttled(cfs_rq))
 			break;
@@ -5090,10 +5092,8 @@ static void dequeue_task_fair(struct rq *rq, struct task_struct *p, int flags)
 	 */
 	schedtune_dequeue_task(p, cpu_of(rq));
 
-	if (!se) {
+	if (!se)
 		sub_nr_running(rq, 1);
-		walt_dec_cumulative_runnable_avg(rq, p);
-	}
 
 	hrtick_update(rq);
 }
@@ -5414,6 +5414,15 @@ static unsigned long target_load(int cpu, int type)
 	return max(rq->cpu_load[type-1], total);
 }
 
+static unsigned long capacity_of(int cpu)
+{
+	return cpu_rq(cpu)->cpu_capacity;
+}
+
+static unsigned long capacity_orig_of(int cpu)
+{
+	return cpu_rq(cpu)->cpu_capacity_orig;
+}
 
 static unsigned long cpu_avg_load_per_task(int cpu)
 {
@@ -5427,125 +5436,48 @@ static unsigned long cpu_avg_load_per_task(int cpu)
 	return 0;
 }
 
-#ifdef CONFIG_FAIR_GROUP_SCHED
 /*
- * effective_load() calculates the load change as seen from the root_task_group
+ * cpu_util returns the amount of capacity of a CPU that is used by CFS
+ * tasks. The unit of the return value must be the one of capacity so we can
+ * compare the utilization with the capacity of the CPU that is available for
+ * CFS task (ie cpu_capacity).
  *
- * Adding load to a group doesn't make a group heavier, but can cause movement
- * of group shares between cpus. Assuming the shares were perfectly aligned one
- * can calculate the shift in shares.
+ * cfs_rq.avg.util_avg is the sum of running time of runnable tasks plus the
+ * recent utilization of currently non-runnable tasks on a CPU. It represents
+ * the amount of utilization of a CPU in the range [0..capacity_orig] where
+ * capacity_orig is the cpu_capacity available at the highest frequency
+ * (arch_scale_freq_capacity()).
+ * The utilization of a CPU converges towards a sum equal to or less than the
+ * current capacity (capacity_curr <= capacity_orig) of the CPU because it is
+ * the running time on this CPU scaled by capacity_curr.
  *
- * Calculate the effective load difference if @wl is added (subtracted) to @tg
- * on this @cpu and results in a total addition (subtraction) of @wg to the
- * total group weight.
- *
- * Given a runqueue weight distribution (rw_i) we can compute a shares
- * distribution (s_i) using:
- *
- *   s_i = rw_i / \Sum rw_j						(1)
- *
- * Suppose we have 4 CPUs and our @tg is a direct child of the root group and
- * has 7 equal weight tasks, distributed as below (rw_i), with the resulting
- * shares distribution (s_i):
- *
- *   rw_i = {   2,   4,   1,   0 }
- *   s_i  = { 2/7, 4/7, 1/7,   0 }
- *
- * As per wake_affine() we're interested in the load of two CPUs (the CPU the
- * task used to run on and the CPU the waker is running on), we need to
- * compute the effect of waking a task on either CPU and, in case of a sync
- * wakeup, compute the effect of the current task going to sleep.
- *
- * So for a change of @wl to the local @cpu with an overall group weight change
- * of @wl we can compute the new shares distribution (s'_i) using:
- *
- *   s'_i = (rw_i + @wl) / (@wg + \Sum rw_j)				(2)
- *
- * Suppose we're interested in CPUs 0 and 1, and want to compute the load
- * differences in waking a task to CPU 0. The additional task changes the
- * weight and shares distributions like:
- *
- *   rw'_i = {   3,   4,   1,   0 }
- *   s'_i  = { 3/8, 4/8, 1/8,   0 }
- *
- * We can then compute the difference in effective weight by using:
- *
- *   dw_i = S * (s'_i - s_i)						(3)
- *
- * Where 'S' is the group weight as seen by its parent.
- *
- * Therefore the effective change in loads on CPU 0 would be 5/56 (3/8 - 2/7)
- * times the weight of the group. The effect on CPU 1 would be -4/56 (4/8 -
- * 4/7) times the weight of the group.
+ * Nevertheless, cfs_rq.avg.util_avg can be higher than capacity_curr or even
+ * higher than capacity_orig because of unfortunate rounding in
+ * cfs.avg.util_avg or just after migrating tasks and new task wakeups until
+ * the average stabilizes with the new running time. We need to check that the
+ * utilization stays within the range of [0..capacity_orig] and cap it if
+ * necessary. Without utilization capping, a group could be seen as overloaded
+ * (CPU0 utilization at 121% + CPU1 utilization at 80%) whereas CPU1 has 20% of
+ * available capacity. We allow utilization to overshoot capacity_curr (but not
+ * capacity_orig) as it useful for predicting the capacity required after task
+ * migrations (scheduler-driven DVFS).
  */
-static long effective_load(struct task_group *tg, int cpu, long wl, long wg)
+static unsigned long __cpu_util(int cpu, int delta)
 {
-	struct sched_entity *se = tg->se[cpu];
+	unsigned long util = cpu_rq(cpu)->cfs.avg.util_avg;
+	unsigned long capacity = capacity_orig_of(cpu);
 
-	if (!tg->parent)	/* the trivial, non-cgroup case */
-		return wl;
+	delta += util;
+	if (delta < 0)
+		return 0;
 
-	for_each_sched_entity(se) {
-		struct cfs_rq *cfs_rq = se->my_q;
-		long W, w = cfs_rq_load_avg(cfs_rq);
-
-		tg = cfs_rq->tg;
-
-		/*
-		 * W = @wg + \Sum rw_j
-		 */
-		W = wg + atomic_long_read(&tg->load_avg);
-
-		/* Ensure \Sum rw_j >= rw_i */
-		W -= cfs_rq->tg_load_avg_contrib;
-		W += w;
-
-		/*
-		 * w = rw_i + @wl
-		 */
-		w += wl;
-
-		/*
-		 * wl = S * s'_i; see (2)
-		 */
-		if (W > 0 && w < W)
-			wl = (w * (long)scale_load_down(tg->shares)) / W;
-		else
-			wl = scale_load_down(tg->shares);
-
-		/*
-		 * Per the above, wl is the new se->load.weight value; since
-		 * those are clipped to [MIN_SHARES, ...) do so now. See
-		 * calc_cfs_shares().
-		 */
-		if (wl < MIN_SHARES)
-			wl = MIN_SHARES;
-
-		/*
-		 * wl = dw_i = S * (s'_i - s_i); see (3)
-		 */
-		wl -= se->avg.load_avg;
-
-		/*
-		 * Recursively apply this logic to all parent groups to compute
-		 * the final effective load change on the root group. Since
-		 * only the @tg group gets extra weight, all parent groups can
-		 * only redistribute existing shares. @wl is the shift in shares
-		 * resulting from this level per the above.
-		 */
-		wg = 0;
-	}
-
-	return wl;
-}
-#else
-
-static long effective_load(struct task_group *tg, int cpu, long wl, long wg)
-{
-	return wl;
+	return (delta >= capacity) ? capacity : delta;
 }
 
-#endif
+static unsigned long cpu_util(int cpu)
+{
+	return __cpu_util(cpu, 0);
+}
 
 static void record_wakee(struct task_struct *p)
 {
@@ -6326,7 +6258,7 @@ schedtune_task_margin(struct task_struct *p)
 unsigned long
 boosted_cpu_util(int cpu, struct sched_walt_cpu_load *walt_load)
 {
-	unsigned long util = cpu_util_freq(cpu);
+	unsigned long util = cpu_util(cpu);
 	long margin = schedtune_cpu_margin(util, cpu);
 
 	trace_sched_boost_cpu(cpu, util, margin);
@@ -6866,11 +6798,6 @@ done:
 
 static inline unsigned long task_util(struct task_struct *p)
 {
-#ifdef CONFIG_SCHED_WALT
-	if (!walt_disabled && sysctl_sched_use_walt_task_util) {
-		return (p->ravg.demand / (walt_ravg_window >> SCHED_CAPACITY_SHIFT));
-	}
-#endif
 	return p->se.avg.util_avg;
 }
 
@@ -6884,17 +6811,6 @@ static int cpu_util_wake(int cpu, struct task_struct *p)
 {
 	unsigned long util, capacity;
 
-#ifdef CONFIG_SCHED_WALT
-	/*
-	 * WALT does not decay idle tasks in the same manner
-	 * as PELT, so it makes little sense to subtract task
-	 * utilization from cpu utilization. Instead just use
-	 * cpu_util for this case.
-	 */
-	if (!walt_disabled && sysctl_sched_use_walt_cpu_util &&
-	    p->state == TASK_WAKING)
-		return cpu_util(cpu);
-#endif
 	/* Task has no contribution or is new */
 	if (cpu != task_cpu(p) || !p->se.avg.last_update_time)
 		return cpu_util(cpu);
@@ -7065,11 +6981,6 @@ retry:
 
 			if (walt_cpu_high_irqload(i))
 				continue;
-
-			if (walt_cpu_high_irqload(i))
-				continue;
-
-			trace_sched_cpu_util(i);
 
 			/*
 			 * p's blocked utilization is still accounted for on prev_cpu

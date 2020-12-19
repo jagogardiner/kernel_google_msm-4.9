@@ -17,6 +17,7 @@
 #include "sched.h"
 
 #include <linux/slab.h>
+#include <uapi/linux/sched/types.h>
 
 struct dl_bandwidth def_dl_bandwidth;
 
@@ -947,7 +948,6 @@ void inc_dl_tasks(struct sched_dl_entity *dl_se, struct dl_rq *dl_rq)
 	WARN_ON(!dl_prio(prio));
 	dl_rq->dl_nr_running++;
 	add_nr_running(rq_of_dl_rq(dl_rq), 1);
-	walt_inc_cumulative_runnable_avg(rq_of_dl_rq(dl_rq), dl_task_of(dl_se));
 
 	inc_dl_deadline(dl_rq, deadline);
 	inc_dl_migration(dl_se, dl_rq);
@@ -962,7 +962,6 @@ void dec_dl_tasks(struct sched_dl_entity *dl_se, struct dl_rq *dl_rq)
 	WARN_ON(!dl_rq->dl_nr_running);
 	dl_rq->dl_nr_running--;
 	sub_nr_running(rq_of_dl_rq(dl_rq), 1);
-	walt_dec_cumulative_runnable_avg(rq_of_dl_rq(dl_rq), dl_task_of(dl_se));
 
 	dec_dl_deadline(dl_rq, dl_se->deadline);
 	dec_dl_migration(dl_se, dl_rq);
@@ -1629,9 +1628,12 @@ retry:
 		goto retry;
 	}
 
-	next_task->on_rq = TASK_ON_RQ_MIGRATING;
 	deactivate_task(rq, next_task, 0);
+	sub_running_bw(next_task->dl.dl_bw, &rq->dl);
+	sub_rq_bw(next_task->dl.dl_bw, &rq->dl);
 	set_task_cpu(next_task, later_rq->cpu);
+	add_rq_bw(next_task->dl.dl_bw, &later_rq->dl);
+	add_running_bw(next_task->dl.dl_bw, &later_rq->dl);
 	activate_task(later_rq, next_task, 0);
 	next_task->on_rq = TASK_ON_RQ_QUEUED;
 	ret = 1;
@@ -1719,9 +1721,12 @@ static void pull_dl_task(struct rq *this_rq)
 
 			resched = true;
 
-			p->on_rq = TASK_ON_RQ_MIGRATING;
 			deactivate_task(src_rq, p, 0);
+			sub_running_bw(p->dl.dl_bw, &src_rq->dl);
+			sub_rq_bw(p->dl.dl_bw, &src_rq->dl);
 			set_task_cpu(p, this_cpu);
+			add_rq_bw(p->dl.dl_bw, &this_rq->dl);
+			add_running_bw(p->dl.dl_bw, &this_rq->dl);
 			activate_task(this_rq, p, 0);
 			p->on_rq = TASK_ON_RQ_QUEUED;
 			dmin = p->dl.deadline;
