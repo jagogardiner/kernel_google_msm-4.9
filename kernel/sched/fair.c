@@ -37,39 +37,6 @@
 #include "walt.h"
 #include <trace/events/sched.h>
 
-#ifdef CONFIG_SCHED_WALT
-
-static inline bool task_fits_max(struct task_struct *p, int cpu);
-static void walt_fixup_sched_stats_fair(struct rq *rq, struct task_struct *p,
-					u32 new_task_load, u32 new_pred_demand);
-static void walt_fixup_nr_big_tasks(struct rq *rq, struct task_struct *p,
-				    int delta, bool inc);
-#endif /* CONFIG_SCHED_WALT */
-
-#if defined(CONFIG_SCHED_WALT) && defined(CONFIG_CFS_BANDWIDTH)
-
-static void walt_init_cfs_rq_stats(struct cfs_rq *cfs_rq);
-static void walt_inc_cfs_rq_stats(struct cfs_rq *cfs_rq,
-				  struct task_struct *p);
-static void walt_dec_cfs_rq_stats(struct cfs_rq *cfs_rq,
-				  struct task_struct *p);
-static void walt_inc_throttled_cfs_rq_stats(struct walt_sched_stats *stats,
-					    struct cfs_rq *cfs_rq);
-static void walt_dec_throttled_cfs_rq_stats(struct walt_sched_stats *stats,
-					    struct cfs_rq *cfs_rq);
-#else
-static inline void walt_init_cfs_rq_stats(struct cfs_rq *cfs_rq) {}
-static inline void
-walt_inc_cfs_rq_stats(struct cfs_rq *cfs_rq, struct task_struct *p) {}
-static inline void
-walt_dec_cfs_rq_stats(struct cfs_rq *cfs_rq, struct task_struct *p) {}
-
-#define walt_inc_throttled_cfs_rq_stats(...)
-#define walt_dec_throttled_cfs_rq_stats(...)
-
-#endif
-
-
 /*
  * Targeted preemption latency for CPU-bound tasks:
  * (default: 6ms * (1 + ilog(ncpus)), units: nanoseconds)
@@ -132,8 +99,10 @@ unsigned int sysctl_sched_child_runs_first __read_mostly;
  * and reduces their over-scheduling. Synchronous workloads will still
  * have immediate wakeup/sleep latencies.
  */
-unsigned int sysctl_sched_wakeup_granularity = 1000000UL;
-unsigned int normalized_sysctl_sched_wakeup_granularity = 1000000UL;
+unsigned int sysctl_sched_wakeup_granularity		= 1000000UL;
+unsigned int normalized_sysctl_sched_wakeup_granularity	= 1000000UL;
+
+const_debug unsigned int sysctl_sched_migration_cost	= 500000UL;
 
 const_debug unsigned int sysctl_sched_migration_cost = 500000UL;
 
@@ -4295,16 +4264,13 @@ static void throttle_cfs_rq(struct cfs_rq *cfs_rq)
 		if (dequeue)
 			dequeue_entity(qcfs_rq, se, DEQUEUE_SLEEP);
 		qcfs_rq->h_nr_running -= task_delta;
-		walt_dec_throttled_cfs_rq_stats(&qcfs_rq->walt_stats, cfs_rq);
 
 		if (qcfs_rq->load.weight)
 			dequeue = 0;
 	}
 
-	if (!se) {
+	if (!se)
 		sub_nr_running(rq, task_delta);
-		walt_dec_throttled_cfs_rq_stats(&rq->walt_stats, cfs_rq);
-	}
 
 	cfs_rq->throttled = 1;
 	cfs_rq->throttled_clock = rq_clock(rq);
@@ -4366,16 +4332,13 @@ void unthrottle_cfs_rq(struct cfs_rq *cfs_rq)
 		if (enqueue)
 			enqueue_entity(cfs_rq, se, ENQUEUE_WAKEUP);
 		cfs_rq->h_nr_running += task_delta;
-		walt_inc_throttled_cfs_rq_stats(&cfs_rq->walt_stats, tcfs_rq);
 
 		if (cfs_rq_throttled(cfs_rq))
 			break;
 	}
 
-	if (!se) {
+	if (!se)
 		add_nr_running(rq, task_delta);
-		walt_inc_throttled_cfs_rq_stats(&rq->walt_stats, tcfs_rq);
-	}
 
 	/* determine whether we need to wake up potentially idle cpu */
 	if (rq->curr == rq->idle && rq->cfs.nr_running)
@@ -4765,7 +4728,6 @@ static void init_cfs_rq_runtime(struct cfs_rq *cfs_rq)
 {
 	cfs_rq->runtime_enabled = 0;
 	INIT_LIST_HEAD(&cfs_rq->throttled_list);
-	walt_init_cfs_rq_stats(cfs_rq);
 }
 
 void start_cfs_bandwidth(struct cfs_bandwidth *cfs_b)
@@ -4925,7 +4887,43 @@ static inline void hrtick_update(struct rq *rq)
 #ifdef CONFIG_SMP
 static unsigned long capacity_orig_of(int cpu);
 static unsigned long cpu_util(int cpu);
-#endif
+
+static bool sd_overutilized(struct sched_domain *sd)
+{
+	return sd->shared->overutilized;
+}
+
+static void set_sd_overutilized(struct sched_domain *sd)
+{
+	trace_sched_overutilized(sd, sd->shared->overutilized, true);
+	sd->shared->overutilized = true;
+}
+
+static void clear_sd_overutilized(struct sched_domain *sd)
+{
+	trace_sched_overutilized(sd, sd->shared->overutilized, false);
+	sd->shared->overutilized = false;
+}
+
+static inline void update_overutilized_status(struct rq *rq)
+{
+	struct sched_domain *sd;
+
+	rcu_read_lock();
+	sd = rcu_dereference(rq->sd);
+	if (sd && !sd_overutilized(sd) &&
+	    cpu_overutilized(rq->cpu))
+		set_sd_overutilized(sd);
+	rcu_read_unlock();
+}
+
+unsigned long boosted_cpu_util(int cpu);
+#else
+
+#define update_overutilized_status(rq) do {} while (0)
+#define boosted_cpu_util(cpu) cpu_util_freq(cpu)
+
+#endif /* CONFIG_SMP */
 
 /*
  * The enqueue_task method is called before nr_running is
@@ -4967,7 +4965,7 @@ enqueue_task_fair(struct rq *rq, struct task_struct *p, int flags)
 		if (cfs_rq_throttled(cfs_rq))
 			break;
 		cfs_rq->h_nr_running++;
-		walt_inc_cfs_rq_stats(cfs_rq, p);
+		walt_inc_cfs_cumulative_runnable_avg(cfs_rq, p);
 
 		flags = ENQUEUE_WAKEUP;
 	}
@@ -4975,7 +4973,7 @@ enqueue_task_fair(struct rq *rq, struct task_struct *p, int flags)
 	for_each_sched_entity(se) {
 		cfs_rq = cfs_rq_of(se);
 		cfs_rq->h_nr_running++;
-		walt_inc_cfs_rq_stats(cfs_rq, p);
+		walt_inc_cfs_cumulative_runnable_avg(cfs_rq, p);
 
 		if (cfs_rq_throttled(cfs_rq))
 			break;
@@ -5011,11 +5009,10 @@ enqueue_task_fair(struct rq *rq, struct task_struct *p, int flags)
 	schedtune_enqueue_task(p, cpu_of(rq));
 
 	if (!se) {
-		if (!task_new && !rq->rd->overutilized &&
-		    cpu_overutilized(rq->cpu)) {
-			rq->rd->overutilized = true;
-			trace_sched_overutilized(true);
-		}
+		add_nr_running(rq, 1);
+		if (!task_new)
+			update_overutilized_status(rq);
+		walt_inc_cumulative_runnable_avg(rq, p);
 	}
 
 #endif /* CONFIG_SMP */
@@ -5048,7 +5045,7 @@ static void dequeue_task_fair(struct rq *rq, struct task_struct *p, int flags)
 		if (cfs_rq_throttled(cfs_rq))
 			break;
 		cfs_rq->h_nr_running--;
-		walt_dec_cfs_rq_stats(cfs_rq, p);
+		walt_dec_cfs_cumulative_runnable_avg(cfs_rq, p);
 
 		/* Don't dequeue parent if it has other entities besides us */
 		if (cfs_rq->load.weight) {
@@ -5068,7 +5065,7 @@ static void dequeue_task_fair(struct rq *rq, struct task_struct *p, int flags)
 	for_each_sched_entity(se) {
 		cfs_rq = cfs_rq_of(se);
 		cfs_rq->h_nr_running--;
-		walt_dec_cfs_rq_stats(cfs_rq, p);
+		walt_dec_cfs_cumulative_runnable_avg(cfs_rq, p);
 
 		if (cfs_rq_throttled(cfs_rq))
 			break;
@@ -5093,7 +5090,10 @@ static void dequeue_task_fair(struct rq *rq, struct task_struct *p, int flags)
 	 */
 	schedtune_dequeue_task(p, cpu_of(rq));
 
-#endif /* CONFIG_SMP */
+	if (!se) {
+		sub_nr_running(rq, 1);
+		walt_dec_cumulative_runnable_avg(rq, p);
+	}
 
 	hrtick_update(rq);
 }
@@ -5565,13 +5565,23 @@ static void record_wakee(struct task_struct *p)
 }
 
 /*
- * Externally visible function. Let's keep the one above
- * so that the check is inlined/optimized in the sched paths.
+ * Returns the current capacity of cpu after applying both
+ * cpu and freq scaling.
  */
-bool sched_is_energy_aware(void)
+unsigned long capacity_curr_of(int cpu)
 {
-	return energy_aware();
+	unsigned long max_cap = cpu_rq(cpu)->cpu_capacity_orig;
+	unsigned long scale_freq = arch_scale_freq_capacity(NULL, cpu);
+
+	return cap_scale(max_cap, scale_freq);
 }
+
+static inline bool energy_aware(void)
+{
+	return sched_feat(ENERGY_AWARE);
+}
+
+static int cpu_util_wake(int cpu, struct task_struct *p);
 
 /*
  * Returns the current capacity of cpu after applying both
@@ -6316,7 +6326,7 @@ schedtune_task_margin(struct task_struct *p)
 unsigned long
 boosted_cpu_util(int cpu, struct sched_walt_cpu_load *walt_load)
 {
-	unsigned long util = cpu_util_freq(cpu, walt_load);
+	unsigned long util = cpu_util_freq(cpu);
 	long margin = schedtune_cpu_margin(util, cpu);
 
 	trace_sched_boost_cpu(cpu, util, margin);
@@ -6853,7 +6863,17 @@ done:
 
 	return target;
 }
- 
+
+static inline unsigned long task_util(struct task_struct *p)
+{
+#ifdef CONFIG_SCHED_WALT
+	if (!walt_disabled && sysctl_sched_use_walt_task_util) {
+		return (p->ravg.demand / (walt_ravg_window >> SCHED_CAPACITY_SHIFT));
+	}
+#endif
+	return p->se.avg.util_avg;
+}
+
 /*
  * cpu_util_wake: Compute cpu utilization with any contributions from
  * the waking task p removed.  check_for_migration() looks for a better CPU of
@@ -7043,7 +7063,7 @@ retry:
 			if (avoid_prev_cpu && i == task_cpu(p))
 				continue;
 
-			if (!cpu_online(i) || cpu_isolated(i) || is_reserved(i))
+			if (walt_cpu_high_irqload(i))
 				continue;
 
 			if (walt_cpu_high_irqload(i))
@@ -8499,12 +8519,8 @@ static void detach_task(struct task_struct *p, struct lb_env *env)
 	lockdep_assert_held(&env->src_rq->lock);
 
 	p->on_rq = TASK_ON_RQ_MIGRATING;
-	deactivate_task(env->src_rq, p, 0);
-	double_lock_balance(env->src_rq, env->dst_rq);
+	deactivate_task(env->src_rq, p, DEQUEUE_NOCLOCK);
 	set_task_cpu(p, env->dst_cpu);
-	if (task_in_related_thread_group(p))
-		env->flags |= LBF_MOVED_RELATED_THREAD_GROUP_TASK;
-	double_unlock_balance(env->src_rq, env->dst_rq);
 }
 
 /*
@@ -11653,9 +11669,6 @@ const struct sched_class fair_sched_class = {
 #ifdef CONFIG_FAIR_GROUP_SCHED
 	.task_change_group	= task_change_group_fair,
 #endif
-#ifdef CONFIG_SCHED_WALT
-	.fixup_walt_sched_stats	= walt_fixup_sched_stats_fair,
-#endif
 };
 
 #ifdef CONFIG_SCHED_DEBUG
@@ -11702,354 +11715,3 @@ __init void init_sched_fair_class(void)
 #endif /* SMP */
 
 }
-
-/* WALT sched implementation begins here */
-#ifdef CONFIG_SCHED_WALT
-
-#ifdef CONFIG_CFS_BANDWIDTH
-
-static void walt_init_cfs_rq_stats(struct cfs_rq *cfs_rq)
-{
-	cfs_rq->walt_stats.nr_big_tasks = 0;
-	cfs_rq->walt_stats.cumulative_runnable_avg = 0;
-	cfs_rq->walt_stats.pred_demands_sum = 0;
-}
-
-static void walt_inc_cfs_rq_stats(struct cfs_rq *cfs_rq, struct task_struct *p)
-{
-	inc_nr_big_task(&cfs_rq->walt_stats, p);
-	fixup_cumulative_runnable_avg(&cfs_rq->walt_stats, p->ravg.demand,
-				      p->ravg.pred_demand);
-}
-
-static void walt_dec_cfs_rq_stats(struct cfs_rq *cfs_rq, struct task_struct *p)
-{
-	dec_nr_big_task(&cfs_rq->walt_stats, p);
-	fixup_cumulative_runnable_avg(&cfs_rq->walt_stats, -(s64)p->ravg.demand,
-				      -(s64)p->ravg.pred_demand);
-}
-
-static void walt_inc_throttled_cfs_rq_stats(struct walt_sched_stats *stats,
-					    struct cfs_rq *tcfs_rq)
-{
-	struct rq *rq = rq_of(tcfs_rq);
-
-	stats->nr_big_tasks += tcfs_rq->walt_stats.nr_big_tasks;
-	fixup_cumulative_runnable_avg(stats,
-				tcfs_rq->walt_stats.cumulative_runnable_avg,
-				tcfs_rq->walt_stats.pred_demands_sum);
-
-	if (stats == &rq->walt_stats)
-		walt_fixup_cum_window_demand(rq,
-			tcfs_rq->walt_stats.cumulative_runnable_avg);
-
-}
-
-static void walt_dec_throttled_cfs_rq_stats(struct walt_sched_stats *stats,
-					    struct cfs_rq *tcfs_rq)
-{
-	struct rq *rq = rq_of(tcfs_rq);
-
-	stats->nr_big_tasks -= tcfs_rq->walt_stats.nr_big_tasks;
-	fixup_cumulative_runnable_avg(stats,
-				-tcfs_rq->walt_stats.cumulative_runnable_avg,
-				-tcfs_rq->walt_stats.pred_demands_sum);
-
-	/*
-	 * We remove the throttled cfs_rq's tasks's contribution from the
-	 * cumulative window demand so that the same can be added
-	 * unconditionally when the cfs_rq is unthrottled.
-	 */
-	if (stats == &rq->walt_stats)
-		walt_fixup_cum_window_demand(rq,
-			-tcfs_rq->walt_stats.cumulative_runnable_avg);
-}
-
-static void walt_fixup_sched_stats_fair(struct rq *rq, struct task_struct *p,
-				       u32 new_task_load, u32 new_pred_demand)
-{
-	struct cfs_rq *cfs_rq;
-	struct sched_entity *se = &p->se;
-	s64 task_load_delta = (s64)new_task_load - task_load(p);
-	s64 pred_demand_delta = PRED_DEMAND_DELTA;
-
-	for_each_sched_entity(se) {
-		cfs_rq = cfs_rq_of(se);
-
-		fixup_cumulative_runnable_avg(&cfs_rq->walt_stats,
-					      task_load_delta,
-					      pred_demand_delta);
-		if (cfs_rq_throttled(cfs_rq))
-			break;
-	}
-
-	/* Fix up rq->walt_stats only if we didn't find any throttled cfs_rq */
-	if (!se) {
-		fixup_cumulative_runnable_avg(&rq->walt_stats,
-					      task_load_delta,
-					      pred_demand_delta);
-		walt_fixup_cum_window_demand(rq, task_load_delta);
-	}
-}
-
-static void walt_fixup_nr_big_tasks(struct rq *rq, struct task_struct *p,
-				    int delta, bool inc)
-{
-	struct cfs_rq *cfs_rq;
-	struct sched_entity *se = &p->se;
-
-	for_each_sched_entity(se) {
-		cfs_rq = cfs_rq_of(se);
-
-		cfs_rq->walt_stats.nr_big_tasks += inc ? delta : -delta;
-		BUG_ON(cfs_rq->walt_stats.nr_big_tasks < 0);
-
-		if (cfs_rq_throttled(cfs_rq))
-			break;
-	}
-
-	/* Fix up rq->walt_stats only if we didn't find any throttled cfs_rq */
-	if (!se)
-		walt_adjust_nr_big_tasks(rq, delta, inc);
-}
-
-/*
- * Check if task is part of a hierarchy where some cfs_rq does not have any
- * runtime left.
- *
- * We can't rely on throttled_hierarchy() to do this test, as
- * cfs_rq->throttle_count will not be updated yet when this function is called
- * from scheduler_tick()
- */
-static int task_will_be_throttled(struct task_struct *p)
-{
-	struct sched_entity *se = &p->se;
-	struct cfs_rq *cfs_rq;
-
-	if (!cfs_bandwidth_used())
-		return 0;
-
-	for_each_sched_entity(se) {
-		cfs_rq = cfs_rq_of(se);
-		if (!cfs_rq->runtime_enabled)
-			continue;
-		if (cfs_rq->runtime_remaining <= 0)
-			return 1;
-	}
-
-	return 0;
-}
-
-#else /* CONFIG_CFS_BANDWIDTH */
-
-static void walt_fixup_sched_stats_fair(struct rq *rq, struct task_struct *p,
-				       u32 new_task_load, u32 new_pred_demand)
-{
-	fixup_walt_sched_stats_common(rq, p, new_task_load, new_pred_demand);
-}
-
-static void walt_fixup_nr_big_tasks(struct rq *rq, struct task_struct *p,
-				    int delta, bool inc)
-{
-	walt_adjust_nr_big_tasks(rq, delta, inc);
-}
-
-static int task_will_be_throttled(struct task_struct *p)
-{
-	return false;
-}
-
-#endif /* CONFIG_CFS_BANDWIDTH */
-
-static inline int
-kick_active_balance(struct rq *rq, struct task_struct *p, int new_cpu)
-{
-	unsigned long flags;
-	int rc = 0;
-
-	/* Invoke active balance to force migrate currently running task */
-	raw_spin_lock_irqsave(&rq->lock, flags);
-	if (!rq->active_balance) {
-		rq->active_balance = 1;
-		rq->push_cpu = new_cpu;
-		get_task_struct(p);
-		rq->push_task = p;
-		rc = 1;
-	}
-	raw_spin_unlock_irqrestore(&rq->lock, flags);
-
-	return rc;
-}
-
-#ifdef CONFIG_SCHED_WALT
-struct walt_rotate_work {
-	struct work_struct w;
-	struct task_struct *src_task;
-	struct task_struct *dst_task;
-	int src_cpu;
-	int dst_cpu;
-};
-
-static DEFINE_PER_CPU(struct walt_rotate_work, walt_rotate_works);
-
-static void walt_rotate_work_func(struct work_struct *work)
-{
-	struct walt_rotate_work *wr = container_of(work,
-				struct walt_rotate_work, w);
-
-	migrate_swap(wr->src_task, wr->dst_task);
-
-	put_task_struct(wr->src_task);
-	put_task_struct(wr->dst_task);
-
-	clear_reserved(wr->src_cpu);
-	clear_reserved(wr->dst_cpu);
-}
-
-void walt_rotate_work_init(void)
-{
-	int i;
-
-	for_each_possible_cpu(i) {
-		struct walt_rotate_work *wr = &per_cpu(walt_rotate_works, i);
-
-		INIT_WORK(&wr->w, walt_rotate_work_func);
-	}
-}
-
-#define WALT_ROTATION_THRESHOLD_NS	16000000
-static void walt_check_for_rotation(struct rq *src_rq)
-{
-	u64 wc, wait, max_wait = 0, run, max_run = 0;
-	int deserved_cpu = nr_cpu_ids, dst_cpu = nr_cpu_ids;
-	int i, src_cpu = cpu_of(src_rq);
-	struct rq *dst_rq;
-	struct walt_rotate_work *wr = NULL;
-
-	if (!walt_rotation_enabled)
-		return;
-
-	if (got_boost_kick())
-		return;
-
-	if (is_max_capacity_cpu(src_cpu))
-		return;
-
-	wc = ktime_get_ns();
-	for_each_possible_cpu(i) {
-		struct rq *rq = cpu_rq(i);
-
-		if (is_max_capacity_cpu(i))
-			break;
-
-		if (is_reserved(i))
-			continue;
-
-		if (!rq->misfit_task || rq->curr->sched_class !=
-						&fair_sched_class)
-			continue;
-
-		wait = wc - rq->curr->last_enqueued_ts;
-		if (wait > max_wait) {
-			max_wait = wait;
-			deserved_cpu = i;
-		}
-	}
-
-	if (deserved_cpu != src_cpu)
-		return;
-
-	for_each_possible_cpu(i) {
-		struct rq *rq = cpu_rq(i);
-
-		if (!is_max_capacity_cpu(i))
-			continue;
-
-		if (is_reserved(i))
-			continue;
-
-		if (rq->curr->sched_class != &fair_sched_class)
-			continue;
-
-		if (rq->nr_running > 1)
-			continue;
-
-		run = wc - rq->curr->last_enqueued_ts;
-
-		if (run < WALT_ROTATION_THRESHOLD_NS)
-			continue;
-
-		if (run > max_run) {
-			max_run = run;
-			dst_cpu = i;
-		}
-	}
-
-	if (dst_cpu == nr_cpu_ids)
-		return;
-
-	dst_rq = cpu_rq(dst_cpu);
-
-	double_rq_lock(src_rq, dst_rq);
-	if (dst_rq->curr->sched_class == &fair_sched_class) {
-		get_task_struct(src_rq->curr);
-		get_task_struct(dst_rq->curr);
-
-		mark_reserved(src_cpu);
-		mark_reserved(dst_cpu);
-		wr = &per_cpu(walt_rotate_works, src_cpu);
-
-		wr->src_task = src_rq->curr;
-		wr->dst_task = dst_rq->curr;
-
-		wr->src_cpu = src_cpu;
-		wr->dst_cpu = dst_cpu;
-	}
-	double_rq_unlock(src_rq, dst_rq);
-
-	if (wr)
-		queue_work_on(src_cpu, system_highpri_wq, &wr->w);
-}
-#else
-static inline void walt_check_for_rotation(struct rq *rq)
-{
-}
-#endif
-
-static DEFINE_RAW_SPINLOCK(migration_lock);
-void check_for_migration(struct rq *rq, struct task_struct *p)
-{
-	int new_cpu;
-	int active_balance;
-	int cpu = task_cpu(p);
-
-	if (rq->misfit_task) {
-		if (rq->curr->state != TASK_RUNNING ||
-		    rq->curr->nr_cpus_allowed == 1)
-			return;
-
-		if (task_will_be_throttled(p))
-			return;
-
-		raw_spin_lock(&migration_lock);
-		rcu_read_lock();
-		new_cpu = select_energy_cpu_brute(p, cpu, 0);
-		rcu_read_unlock();
-		if (capacity_orig_of(new_cpu) > capacity_orig_of(cpu)) {
-			active_balance = kick_active_balance(rq, p, new_cpu);
-			if (active_balance) {
-				mark_reserved(new_cpu);
-				raw_spin_unlock(&migration_lock);
-				stop_one_cpu_nowait(cpu,
-					active_load_balance_cpu_stop, rq,
-					&rq->active_balance_work);
-				return;
-			}
-		} else {
-			walt_check_for_rotation(rq);
-		}
-		raw_spin_unlock(&migration_lock);
-	}
-}
-
-#endif /* CONFIG_SCHED_WALT */

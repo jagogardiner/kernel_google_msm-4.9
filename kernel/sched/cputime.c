@@ -86,9 +86,8 @@ void irqtime_account_irq(struct task_struct *curr)
 	u64_stats_update_end(&irqtime->sync);
 
 	if (account)
-		sched_account_irqtime(cpu, curr, delta, wallclock);
-	else if (curr != this_cpu_ksoftirqd())
-		sched_account_irqstart(cpu, curr, wallclock);
+		walt_account_irqtime(cpu, curr, delta, wallclock);
+#endif
 }
 EXPORT_SYMBOL_GPL(irqtime_account_irq);
 

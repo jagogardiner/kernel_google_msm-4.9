@@ -339,101 +339,7 @@ enum task_event {
 	IRQ_UPDATE	= 5,
 };
 
-/* Note: this need to be in sync with migrate_type_names array */
-enum migrate_types {
-	GROUP_TO_RQ,
-	RQ_TO_GROUP,
-};
-
-#include <linux/spinlock.h>
-
-/*
- * This serializes "schedule()" and also protects
- * the run-queue from deletions/modifications (but
- * _adding_ to the beginning of the run-queue has
- * a separate lock).
- */
-extern rwlock_t tasklist_lock;
-extern spinlock_t mmlist_lock;
-
-struct task_struct;
-
-#ifdef CONFIG_PROVE_RCU
-extern int lockdep_tasklist_lock_is_held(void);
-#endif /* #ifdef CONFIG_PROVE_RCU */
-
-extern void sched_init(void);
-extern void sched_init_smp(void);
-extern asmlinkage void schedule_tail(struct task_struct *prev);
-extern void init_idle(struct task_struct *idle, int cpu, bool hotplug);
-extern void init_idle_bootup_task(struct task_struct *idle);
-
-extern cpumask_var_t cpu_isolated_map;
-
-extern int runqueue_is_locked(int cpu);
-
-#ifdef CONFIG_HOTPLUG_CPU
-extern int sched_isolate_count(const cpumask_t *mask, bool include_offline);
-extern int sched_isolate_cpu(int cpu);
-extern int sched_unisolate_cpu(int cpu);
-extern int sched_unisolate_cpu_unlocked(int cpu);
-#else
-static inline int sched_isolate_count(const cpumask_t *mask,
-				      bool include_offline)
-{
-	cpumask_t count_mask;
-
-	if (include_offline)
-		cpumask_andnot(&count_mask, mask, cpu_online_mask);
-	else
-		return 0;
-
-	return cpumask_weight(&count_mask);
-}
-
-static inline int sched_isolate_cpu(int cpu)
-{
-	return 0;
-}
-
-static inline int sched_unisolate_cpu(int cpu)
-{
-	return 0;
-}
-
-static inline int sched_unisolate_cpu_unlocked(int cpu)
-{
-	return 0;
-}
-#endif
-
-#if defined(CONFIG_SMP) && defined(CONFIG_NO_HZ_COMMON)
-extern void nohz_balance_enter_idle(int cpu);
-extern void set_cpu_sd_state_idle(void);
-extern int get_nohz_timer_target(void);
-#else
-static inline void nohz_balance_enter_idle(int cpu) { }
-static inline void set_cpu_sd_state_idle(void) { }
-#endif
-
-/*
- * Only dump TASK_* tasks. (0 for all tasks)
- */
-extern void show_state_filter(unsigned long state_filter);
-
-static inline void show_state(void)
-{
-	show_state_filter(0);
-}
-
-extern void show_regs(struct pt_regs *);
-
-/*
- * TASK is a pointer to the task whose backtrace we want to see (or NULL for current
- * task), SP is the stack pointer of the first frame that should be shown in the back
- * trace (or NULL if the entire call-chain of the task should be shown).
- */
-extern void show_stack(struct task_struct *task, unsigned long *sp);
+extern cpumask_var_t			cpu_isolated_map;
 
 extern void cpu_init (void);
 extern void trap_init(void);
@@ -808,29 +714,44 @@ struct signal_struct {
 	 * CPUCLOCK_PROF and CPUCLOCK_VIRT for indexing array as these
 	 * values are defined to 0 and 1 respectively
 	 */
-	struct cpu_itimer it[2];
-
-	/*
-	 * Thread group totals for process CPU timers.
-	 * See thread_group_cputimer(), et al, for details.
-	 */
-	struct thread_group_cputimer cputimer;
-
-	/* Earliest-expiration cache. */
-	struct task_cputime cputime_expires;
-
-#ifdef CONFIG_NO_HZ_FULL
-	atomic_t tick_dep_mask;
+	struct sched_avg		avg ____cacheline_aligned_in_smp;
 #endif
+};
 
-	struct list_head cpu_timers[3];
+#ifdef CONFIG_SCHED_WALT
+#define RAVG_HIST_SIZE_MAX  5
 
-	struct pid *tty_old_pgrp;
-
-	/* boolean value for session group leader */
-	int leader;
-
-	struct tty_struct *tty; /* NULL if no tty */
+/* ravg represents frequency scaled cpu-demand of tasks */
+struct ravg {
+	/*
+	 * 'mark_start' marks the beginning of an event (task waking up, task
+	 * starting to execute, task being preempted) within a window
+	 *
+	 * 'sum' represents how runnable a task has been within current
+	 * window. It incorporates both running time and wait time and is
+	 * frequency scaled.
+	 *
+	 * 'sum_history' keeps track of history of 'sum' seen over previous
+	 * RAVG_HIST_SIZE windows. Windows where task was entirely sleeping are
+	 * ignored.
+	 *
+	 * 'demand' represents maximum sum seen over previous
+	 * sysctl_sched_ravg_hist_size windows. 'demand' could drive frequency
+	 * demand for tasks.
+	 *
+	 * 'curr_window' represents task's contribution to cpu busy time
+	 * statistics (rq->curr_runnable_sum) in current window
+	 *
+	 * 'prev_window' represents task's contribution to cpu busy time
+	 * statistics (rq->prev_runnable_sum) in previous window
+	 */
+	u64 mark_start;
+	u32 sum, demand;
+	u32 sum_history[RAVG_HIST_SIZE_MAX];
+	u32 curr_window, prev_window;
+	u16 active_windows;
+};
+#endif
 
 #ifdef CONFIG_SCHED_AUTOGROUP
 	struct autogroup *autogroup;
@@ -945,8 +866,24 @@ struct user_struct {
 #ifdef CONFIG_FANOTIFY
 	atomic_t fanotify_listeners;
 #endif
-#ifdef CONFIG_EPOLL
-	atomic_long_t epoll_watches; /* The number of file descriptors currently watched */
+	int				on_rq;
+
+	int				prio;
+	int				static_prio;
+	int				normal_prio;
+	unsigned int			rt_priority;
+
+	const struct sched_class	*sched_class;
+	struct sched_entity		se;
+	struct sched_rt_entity		rt;
+#ifdef CONFIG_SCHED_WALT
+	struct ravg ravg;
+	/*
+	 * 'init_load_pct' represents the initial task load assigned to children
+	 * of this task
+	 */
+	u32 init_load_pct;
+	u64 last_sleep_ts;
 #endif
 #ifdef CONFIG_POSIX_MQUEUE
 	/* protected by mq_lock	*/
@@ -3041,7 +2978,14 @@ static inline int kernel_dequeue_signal(siginfo_t *info)
 	ret = dequeue_signal(tsk, &tsk->blocked, info ?: &__info);
 	spin_unlock_irq(&tsk->sighand->siglock);
 
-	return ret;
+static inline int sched_set_boost(int enable)
+{
+	return 0;
+}
+
+static inline struct pid *task_pid(struct task_struct *task)
+{
+	return task->pids[PIDTYPE_PID].pid;
 }
 
 static inline void kernel_signal_stop(void)
@@ -3854,58 +3798,8 @@ extern struct atomic_notifier_head load_alert_notifier_head;
 extern long sched_setaffinity(pid_t pid, const struct cpumask *new_mask);
 extern long sched_getaffinity(pid_t pid, struct cpumask *mask);
 
-#ifdef CONFIG_CGROUP_SCHED
-extern struct task_group root_task_group;
-#endif /* CONFIG_CGROUP_SCHED */
-
-extern int task_can_switch_user(struct user_struct *up,
-					struct task_struct *tsk);
-
-#ifdef CONFIG_TASK_XACCT
-static inline void add_rchar(struct task_struct *tsk, ssize_t amt)
-{
-	tsk->ioac.rchar += amt;
-}
-
-static inline void add_wchar(struct task_struct *tsk, ssize_t amt)
-{
-	tsk->ioac.wchar += amt;
-}
-
-static inline void inc_syscr(struct task_struct *tsk)
-{
-	tsk->ioac.syscr++;
-}
-
-static inline void inc_syscw(struct task_struct *tsk)
-{
-	tsk->ioac.syscw++;
-}
-
-static inline void inc_syscfs(struct task_struct *tsk)
-{
-	tsk->ioac.syscfs++;
-}
-#else
-static inline void add_rchar(struct task_struct *tsk, ssize_t amt)
-{
-}
-
-static inline void add_wchar(struct task_struct *tsk, ssize_t amt)
-{
-}
-
-static inline void inc_syscr(struct task_struct *tsk)
-{
-}
-
-static inline void inc_syscw(struct task_struct *tsk)
-{
-}
-static inline void inc_syscfs(struct task_struct *tsk)
-{
-}
-#endif
+#define SCHED_CPUFREQ_INTERCLUSTER_MIG (1U << 3)
+#define SCHED_CPUFREQ_PL (1U << 5)
 
 #ifndef TASK_SIZE_OF
 #define TASK_SIZE_OF(tsk)	TASK_SIZE

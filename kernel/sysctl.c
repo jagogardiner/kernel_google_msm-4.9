@@ -294,87 +294,6 @@ static struct ctl_table kern_table[] = {
 		.mode		= 0644,
 		.proc_handler	= proc_dointvec,
 	},
-#if defined(CONFIG_PREEMPT_TRACER) || defined(CONFIG_IRQSOFF_TRACER)
-	{
-		.procname       = "preemptoff_tracing_threshold_ns",
-		.data           = &sysctl_preemptoff_tracing_threshold_ns,
-		.maxlen         = sizeof(unsigned int),
-		.mode           = 0644,
-		.proc_handler   = proc_dointvec,
-	},
-	{
-		.procname       = "irqsoff_tracing_threshold_ns",
-		.data           = &sysctl_irqsoff_tracing_threshold_ns,
-		.maxlen         = sizeof(unsigned int),
-		.mode           = 0644,
-		.proc_handler   = proc_dointvec,
-	},
-#endif
-#ifdef CONFIG_SCHED_WALT
-	{
-		.procname       = "sched_cpu_high_irqload",
-		.data           = &sysctl_sched_cpu_high_irqload,
-		.maxlen         = sizeof(unsigned int),
-		.mode           = 0644,
-		.proc_handler   = proc_dointvec,
-	},
-	{
-		.procname	= "sched_group_upmigrate",
-		.data		= &sysctl_sched_group_upmigrate_pct,
-		.maxlen		= sizeof(unsigned int),
-		.mode		= 0644,
-		.proc_handler	= walt_proc_update_handler,
-		.extra1		= &sysctl_sched_group_downmigrate_pct,
-	},
-	{
-		.procname	= "sched_group_downmigrate",
-		.data		= &sysctl_sched_group_downmigrate_pct,
-		.maxlen		= sizeof(unsigned int),
-		.mode		= 0644,
-		.proc_handler	= walt_proc_update_handler,
-		.extra1		= &zero,
-		.extra2		= &sysctl_sched_group_upmigrate_pct,
-	},
-	{
-		.procname	= "sched_boost",
-		.data		= &sysctl_sched_boost,
-		.maxlen		= sizeof(unsigned int),
-		.mode		= 0644,
-		.proc_handler	= sched_boost_handler,
-		.extra1         = &zero,
-		.extra2		= &three,
-	},
-	{
-		.procname	= "sched_walt_rotate_big_tasks",
-		.data		= &sysctl_sched_walt_rotate_big_tasks,
-		.maxlen		= sizeof(unsigned int),
-		.mode		= 0644,
-		.proc_handler	= proc_dointvec_minmax,
-		.extra1		= &zero,
-		.extra2		= &one,
-	},
-	{
-		.procname	= "sched_initial_task_util",
-		.data		= &sysctl_sched_init_task_load_pct,
-		.maxlen		= sizeof(unsigned int),
-		.mode		= 0644,
-		.proc_handler	= proc_dointvec,
-	},
-#endif
-	{
-		.procname	= "sched_upmigrate",
-		.data		= &sysctl_sched_capacity_margin,
-		.maxlen		= sizeof(unsigned int),
-		.mode		= 0644,
-		.proc_handler	= sched_updown_migrate_handler,
-	},
-	{
-		.procname	= "sched_downmigrate",
-		.data		= &sysctl_sched_capacity_margin_down,
-		.maxlen		= sizeof(unsigned int),
-		.mode		= 0644,
-		.proc_handler	= sched_updown_migrate_handler,
-	},
 #ifdef CONFIG_SCHED_DEBUG
 	{
 		.procname	= "sched_min_granularity_ns",
@@ -412,6 +331,20 @@ static struct ctl_table kern_table[] = {
 	{
 		.procname	= "sched_use_walt_task_util",
 		.data		= &sysctl_sched_use_walt_task_util,
+		.maxlen		= sizeof(unsigned int),
+		.mode		= 0644,
+		.proc_handler	= proc_dointvec,
+	},
+	{
+		.procname	= "sched_walt_init_task_load_pct",
+		.data		= &sysctl_sched_walt_init_task_load_pct,
+		.maxlen		= sizeof(unsigned int),
+		.mode		= 0644,
+		.proc_handler	= proc_dointvec,
+	},
+	{
+		.procname	= "sched_walt_cpu_high_irqload",
+		.data		= &sysctl_sched_walt_cpu_high_irqload,
 		.maxlen		= sizeof(unsigned int),
 		.mode		= 0644,
 		.proc_handler	= proc_dointvec,
