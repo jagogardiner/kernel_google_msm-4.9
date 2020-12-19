@@ -29,16 +29,13 @@
 #define for_each_possible_sd_level(level)		    \
 	for (level = 0; level < NR_SD_LEVELS; level++)
 
-#ifdef CONFIG_SMP
-
 extern struct sched_group_energy *sge_array[NR_CPUS][NR_SD_LEVELS];
 
+#ifdef CONFIG_GENERIC_ARCH_TOPOLOGY
 void init_sched_energy_costs(void);
-
+int sched_energy_installed(int cpu);
 #else
-
-#define init_sched_energy_costs() do { } while (0)
-
-#endif /* CONFIG_SMP */
+void init_sched_energy_costs(void) {}
+#endif
 
 #endif

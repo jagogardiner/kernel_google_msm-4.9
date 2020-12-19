@@ -1,12 +1,16 @@
-#ifndef _SCHED_SYSCTL_H
-#define _SCHED_SYSCTL_H
+/* SPDX-License-Identifier: GPL-2.0 */
+#ifndef _LINUX_SCHED_SYSCTL_H
+#define _LINUX_SCHED_SYSCTL_H
+
+#include <linux/types.h>
+
+struct ctl_table;
 
 #ifdef CONFIG_DETECT_HUNG_TASK
 extern int	     sysctl_hung_task_check_count;
 extern unsigned int  sysctl_hung_task_panic;
 extern unsigned long sysctl_hung_task_timeout_secs;
 extern int sysctl_hung_task_warnings;
-extern int sysctl_hung_task_selective_monitoring;
 extern int proc_dohung_task_timeout_secs(struct ctl_table *table, int write,
 					 void __user *buffer,
 					 size_t *lenp, loff_t *ppos);
@@ -17,6 +21,8 @@ enum { sysctl_hung_task_timeout_secs = 0 };
 
 extern unsigned int sysctl_sched_latency;
 extern unsigned int sysctl_sched_min_granularity;
+extern unsigned int sysctl_sched_sync_hint_enable;
+extern unsigned int sysctl_sched_cstate_aware;
 extern unsigned int sysctl_sched_wakeup_granularity;
 extern unsigned int sysctl_sched_child_runs_first;
 
@@ -34,24 +40,14 @@ extern unsigned int sysctl_numa_balancing_scan_period_max;
 extern unsigned int sysctl_numa_balancing_scan_size;
 
 #ifdef CONFIG_SCHED_DEBUG
-extern __read_mostly unsigned int sysctl_sched_migration_cost;
-extern __read_mostly unsigned int sysctl_sched_nr_migrate;
-extern __read_mostly unsigned int sysctl_sched_time_avg;
-extern unsigned int sysctl_sched_shares_window;
+extern unsigned int sysctl_sched_migration_cost;
+extern unsigned int sysctl_sched_nr_migrate;
+extern unsigned int sysctl_sched_time_avg;
 
 int sched_proc_update_handler(struct ctl_table *table, int write,
 		void __user *buffer, size_t *length,
 		loff_t *ppos);
 #endif
-
-extern int sched_migrate_notify_proc_handler(struct ctl_table *table,
-		int write, void __user *buffer, size_t *lenp, loff_t *ppos);
-
-extern int sched_boost_handler(struct ctl_table *table, int write,
-			void __user *buffer, size_t *lenp, loff_t *ppos);
-
-extern int sched_window_update_handler(struct ctl_table *table,
-		 int write, void __user *buffer, size_t *lenp, loff_t *ppos);
 
 /*
  *  control realtime throttling:
@@ -64,22 +60,6 @@ extern int sysctl_sched_rt_runtime;
 
 #ifdef CONFIG_CFS_BANDWIDTH
 extern unsigned int sysctl_sched_cfs_bandwidth_slice;
-#endif
-
-#ifdef CONFIG_SCHED_TUNE
-extern unsigned int sysctl_sched_cfs_boost;
-int sysctl_sched_cfs_boost_handler(struct ctl_table *table, int write,
-				   void __user *buffer, size_t *length,
-				   loff_t *ppos);
-static inline unsigned int get_sysctl_sched_cfs_boost(void)
-{
-	return sysctl_sched_cfs_boost;
-}
-#else
-static inline unsigned int get_sysctl_sched_cfs_boost(void)
-{
-	return 0;
-}
 #endif
 
 #ifdef CONFIG_SCHED_AUTOGROUP
@@ -97,10 +77,6 @@ extern int sched_rt_handler(struct ctl_table *table, int write,
 		void __user *buffer, size_t *lenp,
 		loff_t *ppos);
 
-extern int sched_updown_migrate_handler(struct ctl_table *table,
-					int write, void __user *buffer,
-					size_t *lenp, loff_t *ppos);
-
 extern int sysctl_numa_balancing(struct ctl_table *table, int write,
 				 void __user *buffer, size_t *lenp,
 				 loff_t *ppos);
@@ -109,4 +85,4 @@ extern int sysctl_schedstats(struct ctl_table *table, int write,
 				 void __user *buffer, size_t *lenp,
 				 loff_t *ppos);
 
-#endif /* _SCHED_SYSCTL_H */
+#endif /* _LINUX_SCHED_SYSCTL_H */
