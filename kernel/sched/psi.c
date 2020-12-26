@@ -128,6 +128,7 @@
  */
 
 #include "../workqueue_internal.h"
+#include <uapi/linux/sched/types.h>
 #include <linux/sched/loadavg.h>
 #include <linux/seq_file.h>
 #include <linux/proc_fs.h>
