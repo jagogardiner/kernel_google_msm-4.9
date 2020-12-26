@@ -9,7 +9,7 @@
 #include <linux/sched.h>
 #include <linux/vtime.h>
 #include <asm/irq.h>
-#include <linux/cputime.h>
+#include <linux/sched/cputime.h>
 
 /*
  * 'kernel_stat.h' contains the definitions needed for doing
