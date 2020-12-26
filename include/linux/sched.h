@@ -1554,6 +1554,7 @@ static inline int is_global_init(struct task_struct *tsk)
 	return task_tgid_nr(tsk) == 1;
 }
 
+extern struct pid *cad_pid;
 
 /*
  * Per process flags
@@ -1609,6 +1610,11 @@ static inline int is_global_init(struct task_struct *tsk)
 
 #define conditional_used_math(condition)	conditional_stopped_child_used_math(condition, current)
 
+#define copy_to_stopped_child_used_math(child) \
+	do { (child)->flags &= ~PF_USED_MATH, (child)->flags |= current->flags & PF_USED_MATH; } while (0)
+
+/* NOTE: this will return 0 or PF_USED_MATH, it will never return 1 */
+#define tsk_used_math(p)			((p)->flags & PF_USED_MATH)
 #define used_math()				tsk_used_math(current)
 
 static inline bool is_percpu_thread(void)

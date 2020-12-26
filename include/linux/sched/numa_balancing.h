@@ -34,11 +34,7 @@ static inline pid_t task_numa_group_id(struct task_struct *p)
 static inline void set_numabalancing_state(bool enabled)
 {
 }
-<<<<<<< HEAD
 static inline void task_numa_free(struct task_struct *p, bool final)
-=======
-static inline void task_numa_free(struct task_struct *p)
->>>>>>> 5647028d550c... sched/headers: Move the NUMA balancing interfaces from <linux/sched.h> to <linux/sched/numa_balancing.h>
 {
 }
 static inline bool should_numa_migrate_memory(struct task_struct *p,
