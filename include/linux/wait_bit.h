@@ -1,3 +1,4 @@
+/* SPDX-License-Identifier: GPL-2.0 */
 #ifndef _LINUX_WAIT_BIT_H
 #define _LINUX_WAIT_BIT_H
 
@@ -35,6 +36,7 @@ int out_of_line_wait_on_bit_timeout(void *word, int, wait_bit_action_f *action, 
 int out_of_line_wait_on_bit_lock(void *word, int, wait_bit_action_f *action, unsigned int mode);
 int out_of_line_wait_on_atomic_t(atomic_t *p, int (*)(atomic_t *), unsigned int mode);
 struct wait_queue_head *bit_waitqueue(void *word, int bit);
+extern void __init wait_bit_init(void);
 
 int wake_bit_function(struct wait_queue_entry *wq_entry, unsigned mode, int sync, void *key);
 
@@ -255,6 +257,23 @@ int wait_on_atomic_t(atomic_t *val, int (*action)(atomic_t *), unsigned mode)
 	if (atomic_read(val) == 0)
 		return 0;
 	return out_of_line_wait_on_atomic_t(val, action, mode);
+}
+
+/**
+ * clear_and_wake_up_bit - clear a bit and wake up anyone waiting on that bit
+ *
+ * @bit: the bit of the word being waited on
+ * @word: the word being waited on, a kernel virtual address
+ *
+ * You can use this helper if bitflags are manipulated atomically rather than
+ * non-atomically under a lock.
+ */
+static inline void clear_and_wake_up_bit(int bit, void *word)
+{
+	clear_bit_unlock(bit, word);
+	/* See wake_up_bit() for which memory barrier you need to use. */
+	smp_mb__after_atomic();
+	wake_up_bit(word, bit);
 }
 
 #endif /* _LINUX_WAIT_BIT_H */

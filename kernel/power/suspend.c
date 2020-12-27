@@ -32,8 +32,10 @@
 #include <linux/moduleparam.h>
 #include <linux/wakeup_reason.h>
 #ifdef CONFIG_PM_SLEEP_MONITOR
+#include <linux/sched/debug.h>
 #include <linux/kthread.h>
 #include <linux/sched.h>
+#include <uapi/linux/sched/types.h>
 #endif
 
 #include "power.h"
