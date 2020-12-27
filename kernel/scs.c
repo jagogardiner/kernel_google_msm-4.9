@@ -13,8 +13,6 @@
 
 #include <asm/scs.h>
 
-#define SCS_END_MAGIC	0xaf0194819b1635f6UL
-
 static inline void *__scs_base(struct task_struct *tsk)
 {
 	return (void *)((uintptr_t)task_scs(tsk) & ~(SCS_SIZE - 1));

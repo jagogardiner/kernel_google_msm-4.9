@@ -16,6 +16,8 @@
 #define SCS_SIZE		1024
 #define SCS_GFP			(GFP_KERNEL | __GFP_ZERO)
 
+#define SCS_END_MAGIC	0xaf0194819b1635f6UL
+
 extern unsigned long init_shadow_call_stack[];
 
 static inline void *task_scs(struct task_struct *tsk)
