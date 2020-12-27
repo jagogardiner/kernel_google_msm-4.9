@@ -1567,6 +1567,7 @@ static int pidfd_create(struct pid *pid)
 		put_pid(pid);
 
 	return fd;
+}
 static inline void rcu_copy_process(struct task_struct *p)
 {
 #ifdef CONFIG_PREEMPT_RCU
@@ -1734,10 +1735,6 @@ static __latent_entropy struct task_struct *copy_process(
 	spin_lock_init(&p->alloc_lock);
 
 	init_sigpending(&p->pending);
-
-	p->utime = p->stime = p->gtime = 0;
-	p->utimescaled = p->stimescaled = 0;
-	prev_cputime_init(&p->prev_cputime);
 
 #ifdef CONFIG_VIRT_CPU_ACCOUNTING_GEN
 	seqcount_init(&p->vtime.seqcount);
