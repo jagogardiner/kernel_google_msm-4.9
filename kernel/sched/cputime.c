@@ -395,7 +395,7 @@ static void irqtime_account_process_tick(struct task_struct *p, int user_tick,
 	 * other time can exceed ticks occasionally.
 	 */
 	other = account_other_time(ULONG_MAX);
-	if (other >= old_cputime)
+	if (other >= cputime)
 		return;
 
 	cputime -= other;
@@ -509,11 +509,10 @@ void account_process_tick(struct task_struct *p, int user_tick)
 	cputime = TICK_NSEC;
 	steal = steal_account_process_time(ULONG_MAX);
 
-	if (steal >= old_cputime)
+	if (steal >= cputime)
 		return;
 
-	old_cputime -= steal;
-	cputime = cputime_to_nsecs(old_cputime);
+	cputime -= steal;
 
 	if (user_tick)
 		account_user_time(p, cputime);
