@@ -1021,7 +1021,6 @@ static int __ref _cpu_down(unsigned int cpu, int tasks_frozen,
 	struct cpuhp_cpu_state *st = per_cpu_ptr(&cpuhp_state, cpu);
 	int prev_state, ret = 0;
 	bool hasdied = false;
-	u64 start_time = 0;
 
 	if (num_online_cpus() == 1)
 		return -EBUSY;
@@ -1144,7 +1143,6 @@ static int _cpu_up(unsigned int cpu, int tasks_frozen, enum cpuhp_state target)
 	struct cpuhp_cpu_state *st = per_cpu_ptr(&cpuhp_state, cpu);
 	struct task_struct *idle;
 	int ret = 0;
-	u64 start_time = 0;
 
 	cpus_write_lock();
 
