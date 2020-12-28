@@ -2788,9 +2788,6 @@ skip:
 		if (err)
 			__remove_discard_cmd(sbi, dc);
 		dc = rb_entry_safe(node, struct discard_cmd, rb_node);
-
-		if (fatal_signal_pending(current))
-			break;
 	}
 
 	blk_finish_plug(&plug);
