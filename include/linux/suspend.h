@@ -189,11 +189,16 @@ struct platform_suspend_ops {
 struct platform_s2idle_ops {
 	int (*begin)(void);
 	int (*prepare)(void);
+	void (*wake)(void);
+	void (*sync)(void);
 	void (*restore)(void);
 	void (*end)(void);
 };
 
 #ifdef CONFIG_SUSPEND
+extern suspend_state_t mem_sleep_current;
+extern suspend_state_t mem_sleep_default;
+
 /**
  * suspend_set_ops - set platform dependent suspend operations
  * @ops: The new suspend operations to set.
@@ -378,8 +383,6 @@ extern int swsusp_page_is_forbidden(struct page *);
 extern void swsusp_set_page_free(struct page *);
 extern void swsusp_unset_page_free(struct page *);
 extern unsigned long get_safe_page(gfp_t gfp_mask);
-extern asmlinkage int swsusp_arch_suspend(void);
-extern asmlinkage int swsusp_arch_resume(void);
 
 extern void hibernation_set_ops(const struct platform_hibernation_ops *ops);
 extern int hibernate(void);
@@ -427,16 +430,17 @@ extern int unregister_pm_notifier(struct notifier_block *nb);
 /* drivers/base/power/wakeup.c */
 extern bool events_check_enabled;
 extern unsigned int pm_wakeup_irq;
+extern suspend_state_t pm_suspend_target_state;
 
 extern bool pm_wakeup_pending(void);
 extern void pm_system_wakeup(void);
-extern void pm_wakeup_clear(void);
+extern void pm_system_cancel_wakeup(void);
+extern void pm_wakeup_clear(bool reset);
 extern void pm_system_irq_wakeup(unsigned int irq_number);
 extern bool pm_get_wakeup_count(unsigned int *count, bool block);
 extern bool pm_save_wakeup_count(unsigned int count);
 extern void pm_wakep_autosleep_enabled(bool set);
 extern void pm_print_active_wakeup_sources(void);
-extern void pm_get_active_wakeup_sources(char *pending_sources, size_t max);
 
 static inline void lock_system_sleep(void)
 {
@@ -481,7 +485,7 @@ static inline int unregister_pm_notifier(struct notifier_block *nb)
 
 static inline bool pm_wakeup_pending(void) { return false; }
 static inline void pm_system_wakeup(void) {}
-static inline void pm_wakeup_clear(void) {}
+static inline void pm_wakeup_clear(bool reset) {}
 static inline void pm_system_irq_wakeup(unsigned int irq_number) {}
 
 static inline void lock_system_sleep(void) {}
@@ -499,7 +503,7 @@ extern __printf(2, 3) void __pm_pr_dbg(bool defer, const char *fmt, ...);
 
 #include <linux/printk.h>
 
-#define pm_pr_dbg(fmt, ...) \
+#define __pm_pr_dbg(defer, fmt, ...) \
 	no_printk(KERN_DEBUG fmt, ##__VA_ARGS__)
 #endif
 
