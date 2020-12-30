@@ -290,9 +290,6 @@ static void do_idle(void)
 
 	sched_ttwu_pending();
 	schedule_idle();
-
-	if (unlikely(klp_patch_pending(current)))
-		klp_update_patch_state(current);
 }
 
 bool cpu_in_idle(unsigned long pc)
