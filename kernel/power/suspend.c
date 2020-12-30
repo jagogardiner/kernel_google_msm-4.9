@@ -77,7 +77,6 @@ enum toggle_reason {
 };
 
 #define SUSPEND_TIMER_TIMEOUT_MS 30000
-static struct task_struct *ksuspend_mon_tsk;
 static DECLARE_WAIT_QUEUE_HEAD(power_suspend_waitqueue);
 static enum toggle_reason suspend_mon_toggle;
 static DEFINE_MUTEX(suspend_mon_lock);
@@ -98,102 +97,6 @@ static void stop_suspend_mon(void)
 	wake_up(&power_suspend_waitqueue);
 }
 
-static void suspend_timeout(int timeout_count)
-{
-	char *null_pointer = NULL;
-
-	pr_info("Suspend monitor timeout (timer is %d seconds)\n",
-		(SUSPEND_TIMER_TIMEOUT_MS/1000));
-
-	show_state_filter(TASK_UNINTERRUPTIBLE);
-
-	if (timeout_count < 2)
-		return;
-
-	if (is_console_suspended())
-		resume_console();
-
-	pr_info("Trigger a panic\n");
-
-	/* Trigger a NULL pointer dereference */
-	*null_pointer = 'a';
-
-	/* Should not reach here */
-	pr_err("Trigger panic failed!\n");
-}
-
-static int suspend_monitor_kthread(void *arg)
-{
-	long err;
-	struct sched_param param = {.sched_priority
-		= MAX_RT_PRIO-1};
-	static int timeout_count;
-	static long timeout;
-
-	pr_info("Init ksuspend_mon thread\n");
-
-	sched_setscheduler(current, SCHED_FIFO, &param);
-
-	timeout_count = 0;
-	timeout = MAX_SCHEDULE_TIMEOUT;
-
-	do {
-		/* Wait suspend timer timeout */
-		err = wait_event_interruptible_timeout(
-			power_suspend_waitqueue,
-			(suspend_mon_toggle != TOGGLE_NONE),
-			timeout);
-
-		mutex_lock(&suspend_mon_lock);
-		/* suspend monitor state change */
-		if (suspend_mon_toggle != TOGGLE_NONE) {
-			if (suspend_mon_toggle == TOGGLE_START) {
-				timeout = msecs_to_jiffies(
-					SUSPEND_TIMER_TIMEOUT_MS);
-				pr_info("Start suspend monitor\n");
-			} else if (suspend_mon_toggle == TOGGLE_STOP) {
-				timeout = MAX_SCHEDULE_TIMEOUT;
-				timeout_count = 0;
-				pr_info("Stop suspend monitor\n");
-			}
-			suspend_mon_toggle = TOGGLE_NONE;
-			mutex_unlock(&suspend_mon_lock);
-			continue;
-		}
-		mutex_unlock(&suspend_mon_lock);
-
-		/* suspend monitor event handler */
-		if (err == 0) {
-			timeout_count++;
-			suspend_timeout(timeout_count);
-		} else if (err == -ERESTARTSYS) {
-			pr_info("Exit ksuspend_mon!");
-			break;
-		}
-	} while (1);
-
-	return 0;
-}
-
-static void init_suspend_monitor_thread(void)
-{
-	int ret;
-
-	ksuspend_mon_tsk = kthread_create(suspend_monitor_kthread,
-		NULL, "ksuspend_mon");
-	if (IS_ERR(ksuspend_mon_tsk)) {
-		ret = PTR_ERR(ksuspend_mon_tsk);
-		ksuspend_mon_tsk = NULL;
-		pr_err("Create suspend_monitor_kthread failed!"
-			" ret = %d\n", ret);
-		return;
-	}
-
-	suspend_mon_toggle = TOGGLE_NONE;
-	wake_up_process(ksuspend_mon_tsk);
-
-	return;
-}
 #endif
 
 void s2idle_set_ops(const struct platform_s2idle_ops *ops)

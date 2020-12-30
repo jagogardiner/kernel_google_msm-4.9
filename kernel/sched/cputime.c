@@ -167,7 +167,7 @@ void account_guest_time(struct task_struct *p, u64 cputime)
 	/* Add guest time to process. */
 	p->utime += cputime;
 	account_group_user_time(p, cputime);
-	p->gtime += cputime_to_nsecs(cputime);
+	p->gtime += cputime;
 
 	/* Add guest time to cpustat. */
 	if (task_nice(p) > 0) {
