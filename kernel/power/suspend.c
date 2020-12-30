@@ -783,14 +783,12 @@ int pm_suspend(suspend_state_t state)
 		return -EINVAL;
 
 	pm_suspend_marker("entry");
-	gpio_set_value(slst_gpio_base_id + PROC_AWAKE_ID, 0);
 
 #ifdef CONFIG_PM_SLEEP_MONITOR
 	start_suspend_mon();
 #endif
 
 	error = enter_state(state);
-	gpio_set_value(slst_gpio_base_id + PROC_AWAKE_ID, 1);
 	if (error) {
 		suspend_stats.fail++;
 		dpm_save_failed_errno(error);
