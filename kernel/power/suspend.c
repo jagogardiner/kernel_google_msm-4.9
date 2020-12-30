@@ -255,7 +255,7 @@ static void s2idle_loop(void)
 		 * Thus freeze_enter() should be called right after
 		 * all devices have been suspended.
 		 */
-		freeze_enter();
+		s2idle_enter();
 
 		dpm_noirq_resume_devices(PMSG_RESUME);
 
