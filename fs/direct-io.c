@@ -510,11 +510,14 @@ static blk_status_t dio_bio_complete(struct dio *dio, struct bio *bio)
 	unsigned i;
 	blk_status_t err = bio->bi_status;
 
-	if (bio->bi_error)
-		dio->io_error = -EIO;
+	if (err) {
+		if (err == BLK_STS_AGAIN && (bio->bi_opf & REQ_NOWAIT))
+			dio->io_error = -EAGAIN;
+		else
+			dio->io_error = -EIO;
+	}
 
 	if (dio->is_async && dio->op == REQ_OP_READ && dio->should_dirty) {
-		err = bio->bi_error;
 		bio_check_pages_dirty(bio);	/* transfers ownership */
 	} else {
 		bio_for_each_segment_all(bvec, bio, i) {
@@ -525,7 +528,6 @@ static blk_status_t dio_bio_complete(struct dio *dio, struct bio *bio)
 				set_page_dirty_lock(page);
 			put_page(page);
 		}
-		err = bio->bi_error;
 		bio_put(bio);
 	}
 	return err;
