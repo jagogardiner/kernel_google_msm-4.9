@@ -283,8 +283,6 @@ void *trace_event_buffer_reserve(struct trace_event_buffer *fbuffer,
 }
 EXPORT_SYMBOL_GPL(trace_event_buffer_reserve);
 
-static DEFINE_SPINLOCK(tracepoint_iter_lock);
-
 int trace_event_reg(struct trace_event_call *call,
 		    enum trace_reg type, void *data)
 {
