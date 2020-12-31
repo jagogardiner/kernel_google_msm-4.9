@@ -34,7 +34,6 @@ TRACE_DEFINE_ENUM(LFS);
 TRACE_DEFINE_ENUM(SSR);
 TRACE_DEFINE_ENUM(__REQ_RAHEAD);
 TRACE_DEFINE_ENUM(__REQ_SYNC);
-TRACE_DEFINE_ENUM(__REQ_NOIDLE);
 TRACE_DEFINE_ENUM(__REQ_PREFLUSH);
 TRACE_DEFINE_ENUM(__REQ_FUA);
 TRACE_DEFINE_ENUM(__REQ_PRIO);
@@ -1038,7 +1037,6 @@ DECLARE_EVENT_CLASS(f2fs__submit_page_bio,
 		(unsigned long long)__entry->old_blkaddr,
 		(unsigned long long)__entry->new_blkaddr,
 		show_bio_type(__entry->op, __entry->op_flags),
-		show_block_temp(__entry->temp),
 		show_block_type(__entry->type))
 );
 

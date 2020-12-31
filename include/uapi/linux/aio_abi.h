@@ -72,8 +72,16 @@ struct io_event {
 struct iocb {
 	/* these are internal to the kernel/libc. */
 	__u64	aio_data;	/* data to be returned in event's data */
-	__u32	PADDED(aio_key, aio_reserved1);
-				/* the kernel sets aio_key to the req # */
+
+#if defined(__BYTE_ORDER) ? __BYTE_ORDER == __LITTLE_ENDIAN : defined(__LITTLE_ENDIAN)
+	__u32	aio_key;	/* the kernel sets aio_key to the req # */
+	__kernel_rwf_t aio_rw_flags;	/* RWF_* flags */
+#elif defined(__BYTE_ORDER) ? __BYTE_ORDER == __BIG_ENDIAN : defined(__BIG_ENDIAN)
+	__kernel_rwf_t aio_rw_flags;	/* RWF_* flags */
+	__u32	aio_key;	/* the kernel sets aio_key to the req # */
+#else
+#error edit for your odd byteorder.
+#endif
 
 	/* common fields */
 	__u16	aio_lio_opcode;	/* see IOCB_CMD_ above */
@@ -101,4 +109,3 @@ struct iocb {
 #undef IFLITTLE
 
 #endif /* __LINUX__AIO_ABI_H */
-
