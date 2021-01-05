@@ -1,32 +1,73 @@
+ifeq ($(CONFIG_BOARD_B1C1),y)
 ifeq ($(CONFIG_BUILD_ARM64_DT_OVERLAY),y)
 
-dtbo-$(CONFIG_BOARD_FLORAL) += \
-	sm8150-floral-jaws-overlay.dtbo \
-	sm8150-coral-proto-overlay.dtbo \
-	sm8150-coral-evt-overlay.dtbo \
-	sm8150-coral-evt1_1-overlay.dtbo \
-	sm8150-coral-dvt-overlay.dtbo \
-	sm8150-coral-overlay.dtbo \
-	sm8150-flame-proto-overlay.dtbo \
-	sm8150-flame-notouch-overlay.dtbo \
-	sm8150-flame-evt-overlay.dtbo \
-	sm8150-flame-evt1_1-overlay.dtbo \
-	sm8150-flame-dvt-overlay.dtbo \
-	sm8150-flame-overlay.dtbo
+# V2 SDM845
+dtbo-$(CONFIG_BOARD_B1C1) += \
+	sdm845-v2-b1c1-devboard.dtbo \
+	sdm845-b1-proto.dtbo \
+	sdm845-b1-proto-v1.1.dtbo
 
-sm8150-floral-jaws-overlay.dtbo-base	:= qcom-base/sm8150.dtb
-sm8150-coral-proto-overlay.dtbo-base	:= qcom-base/sm8150-v2.dtb
-sm8150-coral-evt-overlay.dtbo-base	:= qcom-base/sm8150-v2.dtb
-sm8150-coral-evt1_1-overlay.dtbo-base	:= qcom-base/sm8150-v2.dtb
-sm8150-coral-dvt-overlay.dtbo-base	:= qcom-base/sm8150-v2.dtb
-sm8150-coral-overlay.dtbo-base		:= qcom-base/sm8150-v2.dtb
-sm8150-flame-proto-overlay.dtbo-base	:= qcom-base/sm8150-v2.dtb
-sm8150-flame-notouch-overlay.dtbo-base	:= qcom-base/sm8150-v2.dtb
-sm8150-flame-evt-overlay.dtbo-base	:= qcom-base/sm8150-v2.dtb
-sm8150-flame-evt1_1-overlay.dtbo-base	:= qcom-base/sm8150-v2.dtb
-sm8150-flame-dvt-overlay.dtbo-base	:= qcom-base/sm8150-v2.dtb
-sm8150-flame-overlay.dtbo-base		:= qcom-base/sm8150-v2.dtb
+sdm845-v2-b1c1-devboard.dtbo-base	:= ../qcom/sdm845-v2.dtb
+sdm845-b1-proto.dtbo-base		:= ../qcom/sdm845-v2.dtb
+sdm845-b1-proto-v1.1.dtbo-base		:= ../qcom/sdm845-v2.dtb
+
+# V2.1 SDM845
+dtbo-$(CONFIG_BOARD_B1C1) += \
+	sdm845-b1c1-dev2.dtbo \
+	sdm845-b1-evt1.dtbo \
+	sdm845-b1-evt2.dtbo \
+	sdm845-b1-evt2.1.dtbo \
+	sdm845-b1-dvt.dtbo \
+	sdm845-b1-dvt1.1.dtbo \
+	sdm845-c1-proto.dtbo \
+	sdm845-c1-evt.dtbo \
+	sdm845-c1-evt1.1.dtbo \
+	sdm845-c1-dvt.dtbo \
+	sdm845-c1-dvt1.1.dtbo
+
+sdm845-b1c1-dev2.dtbo-base		:= ../qcom/sdm845-v2.1.dtb
+sdm845-b1-evt1.dtbo-base		:= ../qcom/sdm845-v2.1.dtb
+sdm845-b1-evt2.dtbo-base		:= ../qcom/sdm845-v2.1.dtb
+sdm845-b1-evt2.1.dtbo-base		:= ../qcom/sdm845-v2.1.dtb
+sdm845-b1-dvt.dtbo-base			:= ../qcom/sdm845-v2.1.dtb
+sdm845-b1-dvt1.1.dtbo-base		:= ../qcom/sdm845-v2.1.dtb
+sdm845-c1-proto.dtbo-base		:= ../qcom/sdm845-v2.1.dtb
+sdm845-c1-evt.dtbo-base			:= ../qcom/sdm845-v2.1.dtb
+sdm845-c1-evt1.1.dtbo-base		:= ../qcom/sdm845-v2.1.dtb
+sdm845-c1-dvt.dtbo-base			:= ../qcom/sdm845-v2.1.dtb
+sdm845-c1-dvt1.1.dtbo-base		:= ../qcom/sdm845-v2.1.dtb
+
 endif
+endif #CONFIG_BOARD_B1C1
+
+ifeq ($(CONFIG_BOARD_BONITO),y)
+ifeq ($(CONFIG_BUILD_ARM64_DT_OVERLAY),y)
+
+dtbo-$(CONFIG_BOARD_BONITO) += \
+	sdm670-b4-dev.dtbo \
+	sdm670-s4-dev.dtbo \
+	sdm670-b4-proto.dtbo \
+	sdm670-s4-proto.dtbo \
+	sdm670-b4-evt.dtbo \
+	sdm670-s4-evt.dtbo \
+	sdm670-b4-dvt.dtbo \
+	sdm670-s4-dvt.dtbo \
+	sdm670-b4-pvt.dtbo \
+	sdm670-s4-pvt.dtbo
+
+sdm670-b4-dev.dtbo-base		:= ../qcom/sdm670.dtb
+sdm670-s4-dev.dtbo-base		:= ../qcom/sdm670.dtb
+sdm670-b4-proto.dtbo-base		:= ../qcom/sdm670.dtb
+sdm670-s4-proto.dtbo-base		:= ../qcom/sdm670.dtb
+sdm670-b4-evt.dtbo-base		:= ../qcom/sdm670.dtb
+sdm670-s4-evt.dtbo-base		:= ../qcom/sdm670.dtb
+sdm670-b4-dvt.dtbo-base		:= ../qcom/sdm670.dtb
+sdm670-s4-dvt.dtbo-base		:= ../qcom/sdm670.dtb
+sdm670-b4-pvt.dtbo-base		:= ../qcom/sdm670.dtb
+sdm670-s4-pvt.dtbo-base		:= ../qcom/sdm670.dtb
+
+endif
+endif #CONFIG_BOARD_BONITO
 
 always		:= $(dtb-y)
 subdir-y	:= $(dts-dirs)
