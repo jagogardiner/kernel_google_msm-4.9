@@ -1,14 +1,6 @@
+// SPDX-License-Identifier: GPL-2.0-only
 /*
- * Copyright (c) 2018, The Linux Foundation. All rights reserved.
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 and
- * only version 2 as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+ * Copyright (c) 2018-2019, The Linux Foundation. All rights reserved.
  */
 
 #define pr_fmt(fmt) "%s:%s " fmt, KBUILD_MODNAME, __func__
@@ -31,12 +23,13 @@
 struct bcl_device {
 	struct notifier_block			psy_nb;
 	struct work_struct			soc_eval_work;
-	long int				trip_temp;
+	long					trip_temp;
 	int					trip_val;
 	struct mutex				state_trans_lock;
 	bool					irq_enabled;
 	struct thermal_zone_device		*tz_dev;
 	struct thermal_zone_of_device_ops	ops;
+	const char				*bat_psy_name;
 };
 
 static struct bcl_device *bcl_perph;
@@ -69,7 +62,7 @@ static int bcl_read_soc(void *data, int *val)
 
 	*val = 100;
 	if (!batt_psy)
-		batt_psy = power_supply_get_by_name("battery");
+		batt_psy = power_supply_get_by_name(bcl_perph->bat_psy_name);
 	if (batt_psy) {
 		err = power_supply_get_property(batt_psy,
 				POWER_SUPPLY_PROP_CAPACITY, &ret);
@@ -89,13 +82,17 @@ static void bcl_evaluate_soc(struct work_struct *work)
 {
 	int battery_percentage;
 
+	if (!bcl_perph->tz_dev)
+		return;
+
 	if (bcl_read_soc(NULL, &battery_percentage))
 		return;
 
 	mutex_lock(&bcl_perph->state_trans_lock);
-	if (!bcl_perph->irq_enabled)
-		goto eval_exit;
-	if (battery_percentage > bcl_perph->trip_temp)
+	if (!bcl_perph->irq_enabled) {
+		if (battery_percentage <= bcl_perph->trip_temp)
+			goto eval_exit;
+	} else if (battery_percentage > bcl_perph->trip_temp)
 		goto eval_exit;
 
 	bcl_perph->trip_val = battery_percentage;
@@ -112,7 +109,7 @@ static int battery_supply_callback(struct notifier_block *nb,
 {
 	struct power_supply *psy = data;
 
-	if (strcmp(psy->desc->name, "battery"))
+	if (strcmp(psy->desc->name, bcl_perph->bat_psy_name))
 		return NOTIFY_OK;
 	schedule_work(&bcl_perph->soc_eval_work);
 
@@ -133,17 +130,24 @@ static int bcl_soc_remove(struct platform_device *pdev)
 static int bcl_soc_probe(struct platform_device *pdev)
 {
 	int ret = 0;
+	const char *bat_psy_name = NULL;
 
 	bcl_perph = devm_kzalloc(&pdev->dev, sizeof(*bcl_perph), GFP_KERNEL);
 	if (!bcl_perph)
 		return -ENOMEM;
+
+	ret = of_property_read_string(pdev->dev.of_node,
+		"google,fg-psy-name", &bat_psy_name);
+	if (ret)
+		bat_psy_name = "battery";
 
 	mutex_init(&bcl_perph->state_trans_lock);
 	bcl_perph->ops.get_temp = bcl_read_soc;
 	bcl_perph->ops.set_trips = bcl_set_soc;
 	INIT_WORK(&bcl_perph->soc_eval_work, bcl_evaluate_soc);
 	bcl_perph->psy_nb.notifier_call = battery_supply_callback;
-
+	bcl_perph->bat_psy_name = devm_kstrdup(&pdev->dev,
+		bat_psy_name, GFP_KERNEL);
 	ret = power_supply_reg_notifier(&bcl_perph->psy_nb);
 	if (ret < 0) {
 		pr_err("soc notifier registration error. defer. err:%d\n",
@@ -189,4 +193,7 @@ static struct platform_driver bcl_driver = {
 	},
 };
 
-builtin_platform_driver(bcl_driver);
+module_platform_driver(bcl_driver);
+
+MODULE_LICENSE("GPL v2");
+MODULE_DESCRIPTION("QTI Battery state of charge sensor driver");

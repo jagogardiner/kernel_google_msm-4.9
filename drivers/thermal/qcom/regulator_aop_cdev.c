@@ -1,13 +1,6 @@
-/* Copyright (c) 2017, The Linux Foundation. All rights reserved.
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 and
- * only version 2 as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+// SPDX-License-Identifier: GPL-2.0-only
+/*
+ * Copyright (c) 2017-2019, The Linux Foundation. All rights reserved.
  */
 
 #include <linux/module.h>
@@ -99,7 +92,7 @@ static int reg_send_min_state(struct thermal_cooling_device *cdev,
 	int ret = 0;
 
 	if (state > REG_CDEV_MAX_STATE)
-		state = REG_CDEV_MAX_STATE;
+		return -EINVAL;
 
 	if (reg_dev->min_state == state)
 		return ret;
@@ -127,6 +120,9 @@ static int reg_get_cur_state(struct thermal_cooling_device *cdev,
 static int reg_send_cur_state(struct thermal_cooling_device *cdev,
 				unsigned long state)
 {
+	if (state > REG_CDEV_MAX_STATE)
+		return -EINVAL;
+
 	return 0;
 }
 
@@ -221,4 +217,7 @@ static struct platform_driver reg_dev_driver = {
 	},
 	.probe = reg_dev_probe,
 };
-builtin_platform_driver(reg_dev_driver);
+module_platform_driver(reg_dev_driver);
+
+MODULE_LICENSE("GPL v2");
+MODULE_DESCRIPTION("QTI AOP Regulator cooling device");
