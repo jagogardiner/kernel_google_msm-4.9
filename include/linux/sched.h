@@ -1916,7 +1916,6 @@ struct task_struct {
 	struct mm_event_task	mm_event[MM_TYPE_NUM];
 	unsigned long		next_period;
 #endif
-
 #ifdef CONFIG_DEBUG_MUTEXES
 	/* mutex deadlock detection */
 	struct mutex_waiter *blocked_on;
