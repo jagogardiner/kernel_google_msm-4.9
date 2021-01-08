@@ -1,20 +1,8 @@
+// SPDX-License-Identifier: GPL-2.0-only
 /*
- *  Copyright (C) 2012 Intel Corp
- *  Copyright (C) 2012 Durgadoss R <durgadoss.r@intel.com>
- *  Copyright (c) 2017, The Linux Foundation. All rights reserved.
- *
- *  ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
- *
- *  This program is free software; you can redistribute it and/or modify
- *  it under the terms of the GNU General Public License as published by
- *  the Free Software Foundation; version 2 of the License.
- *
- *  This program is distributed in the hope that it will be useful, but
- *  WITHOUT ANY WARRANTY; without even the implied warranty of
- *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
- *  General Public License for more details.
- *
- *  ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+ * Copyright (C) 2012 Intel Corp
+ * Copyright (C) 2012 Durgadoss R <durgadoss.r@intel.com>
+ * Copyright (c) 2017-2018, The Linux Foundation. All rights reserved.
  */
 
 #include <linux/thermal.h>
@@ -62,19 +50,38 @@ static void thermal_zone_trip_update(struct thermal_zone_device *tz, int trip)
 		dev_dbg(&instance->cdev->device, "old_target=%d, target=%d\n",
 					old_target, (int)instance->target);
 
-		if (old_target == instance->target)
+		if (instance->initialized && old_target == instance->target)
 			continue;
 
-		if (old_target == THERMAL_NO_TARGET &&
+		if (!instance->initialized) {
+			if (instance->target != THERMAL_NO_TARGET) {
+				trace_thermal_zone_trip(tz, trip, trip_type,
+							true);
+				tz->passive += 1;
+			}
+		} else {
+			if (old_target == THERMAL_NO_TARGET &&
 				instance->target != THERMAL_NO_TARGET) {
-			trace_thermal_zone_trip(tz, trip, trip_type, true);
-			tz->passive += 1;
-		} else if (old_target != THERMAL_NO_TARGET &&
+				trace_thermal_zone_trip(tz, trip, trip_type,
+							true);
+				tz->passive += 1;
+			} else if (old_target != THERMAL_NO_TARGET &&
 				instance->target == THERMAL_NO_TARGET) {
-			trace_thermal_zone_trip(tz, trip, trip_type, false);
-			tz->passive -= 1;
+				trace_thermal_zone_trip(tz, trip, trip_type,
+							false);
+				tz->passive -= 1;
+			}
 		}
 
+		if (old_target != instance->target) {
+			dev_info_ratelimited(
+				&tz->device,
+				"tz:%s, temp:%d, cdev:%s, target:%d\n",
+				tz->type, tz->temperature, instance->cdev->type,
+				instance->target);
+		}
+
+		instance->initialized = true;
 		instance->cdev->updated = false; /* cdev needs update */
 	}
 

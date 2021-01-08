@@ -1,14 +1,6 @@
-/* Copyright (c) 2012-2018, The Linux Foundation. All rights reserved.
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 and
- * only version 2 as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
+// SPDX-License-Identifier: GPL-2.0-only
+/*
+ * Copyright (c) 2012-2018, The Linux Foundation. All rights reserved.
  */
 
 #include "tsens.h"
@@ -59,7 +51,7 @@ int tsens_mtc_reset_history_counter(unsigned int zone)
 		pr_debug("tsens : zone =%d reg=%x\n", zone, reg_cntl);
 	}
 
-	/*Disble the bit to start counter*/
+	/*Disable the bit to start counter*/
 	writel_relaxed(reg_cntl & ~(1 << TSENS_RESET_HISTORY_SHIFT),
 				(sensor_addr + (zone * TSENS_SN_ADDR_OFFSET)));
 	reg_cntl = readl_relaxed((sensor_addr +
@@ -76,8 +68,7 @@ int tsens_set_mtc_zone_sw_mask(unsigned int zone, unsigned int th1_enable,
 	unsigned int reg_cntl;
 	void __iomem *sensor_addr;
 	struct tsens_device *tmdev = NULL;
-	u32 ver_major;
-	u32 ver_minor;
+	u32 ver_major, ver_minor;
 
 	if (zone > TSENS_NUM_MTC_ZONES_SUPPORT)
 		return -EINVAL;
@@ -130,8 +121,7 @@ int tsens_get_mtc_zone_log(unsigned int zone, void *zone_log)
 	int *zlog = (int *)zone_log;
 	void __iomem *sensor_addr;
 	struct tsens_device *tmdev = NULL;
-	u32 ver_major;
-	u32 ver_minor;
+	u32 ver_major, ver_minor;
 
 	if (zone > TSENS_NUM_MTC_ZONES_SUPPORT)
 		return -EINVAL;

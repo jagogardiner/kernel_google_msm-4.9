@@ -15,6 +15,7 @@
 
 #define pr_fmt(fmt) KBUILD_MODNAME ": " fmt
 
+#include <linux/acpi.h>
 #include <linux/module.h>
 #include <linux/interrupt.h>
 #include <asm/cpu_device_id.h>
@@ -31,6 +32,7 @@ MODULE_PARM_DESC(crit_offset,
 /* IRQ 86 is a fixed APIC interrupt for BYT DTS Aux threshold notifications */
 #define BYT_SOC_DTS_APIC_IRQ	86
 
+static int soc_dts_thres_gsi;
 static int soc_dts_thres_irq;
 static struct intel_soc_dts_sensors *soc_dts;
 
@@ -65,7 +67,21 @@ static int __init intel_soc_thermal_init(void)
 		return err;
 	}
 
-	soc_dts_thres_irq = (int)match_cpu->driver_data;
+	soc_dts_thres_gsi = (int)match_cpu->driver_data;
+	if (soc_dts_thres_gsi) {
+		/*
+		 * Note the flags here MUST match the firmware defaults, rather
+		 * then the request_irq flags, otherwise we get an EBUSY error.
+		 */
+		soc_dts_thres_irq = acpi_register_gsi(NULL, soc_dts_thres_gsi,
+						      ACPI_LEVEL_SENSITIVE,
+						      ACPI_ACTIVE_LOW);
+		if (soc_dts_thres_irq < 0) {
+			pr_warn("intel_soc_dts: Could not get IRQ for GSI %d, err %d\n",
+				soc_dts_thres_gsi, soc_dts_thres_irq);
+			soc_dts_thres_irq = 0;
+		}
+	}
 
 	if (soc_dts_thres_irq) {
 		err = request_threaded_irq(soc_dts_thres_irq, NULL,
@@ -73,8 +89,12 @@ static int __init intel_soc_thermal_init(void)
 					   IRQF_TRIGGER_RISING | IRQF_ONESHOT,
 					   "soc_dts", soc_dts);
 		if (err) {
-			pr_err("request_threaded_irq ret %d\n", err);
-			goto error_irq;
+			/*
+			 * Do not just error out because the user space thermal
+			 * daemon such as DPTF may use polling instead of being
+			 * interrupt driven.
+			 */
+			pr_warn("request_threaded_irq ret %d\n", err);
 		}
 	}
 
@@ -86,9 +106,10 @@ static int __init intel_soc_thermal_init(void)
 	return 0;
 
 error_trips:
-	if (soc_dts_thres_irq)
+	if (soc_dts_thres_irq) {
 		free_irq(soc_dts_thres_irq, soc_dts);
-error_irq:
+		acpi_unregister_gsi(soc_dts_thres_gsi);
+	}
 	intel_soc_dts_iosf_exit(soc_dts);
 
 	return err;
@@ -96,8 +117,10 @@ error_irq:
 
 static void __exit intel_soc_thermal_exit(void)
 {
-	if (soc_dts_thres_irq)
+	if (soc_dts_thres_irq) {
 		free_irq(soc_dts_thres_irq, soc_dts);
+		acpi_unregister_gsi(soc_dts_thres_gsi);
+	}
 	intel_soc_dts_iosf_exit(soc_dts);
 }
 

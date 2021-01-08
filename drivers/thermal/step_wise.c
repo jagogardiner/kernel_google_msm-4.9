@@ -36,7 +36,7 @@
  *       for this trip point
  *    d. if the trend is THERMAL_TREND_DROP_FULL, use lower limit
  *       for this trip point
- * If the temperature is lower than a hysteresis temperature,
+ * If the temperature is lower than a trip point,
  *    a. if the trend is THERMAL_TREND_RAISING, do nothing
  *    b. if the trend is THERMAL_TREND_DROPPING, use lower cooling
  *       state for this trip point, if the cooling state already
@@ -53,6 +53,11 @@ static unsigned long get_target_state(struct thermal_instance *instance,
 	unsigned long cur_state;
 	unsigned long next_target;
 
+	/*
+	 * If the throttle condition is not reached, clear the throttling.
+	 */
+	if (!throttle)
+		return THERMAL_NO_TARGET;
 	/*
 	 * We keep this instance the way it is by default.
 	 * Otherwise, we use the current state of the
@@ -75,14 +80,6 @@ static unsigned long get_target_state(struct thermal_instance *instance,
 		return next_target;
 	}
 
-	/*
-	 * If there is no new throttle request and if the thermal zone
-	 * wasn't requesting any previous mitigation, then skip the
-	 * evaluation.
-	 */
-	if (instance->target == THERMAL_NO_TARGET && !throttle)
-		return next_target;
-
 	switch (trend) {
 	case THERMAL_TREND_RAISING:
 		if (throttle) {
@@ -97,7 +94,9 @@ static unsigned long get_target_state(struct thermal_instance *instance,
 			next_target = instance->upper;
 		break;
 	case THERMAL_TREND_DROPPING:
-		if (cur_state <= instance->lower) {
+	case THERMAL_TREND_STABLE:
+		if (cur_state <= instance->lower ||
+			instance->target <= instance->lower) {
 			if (!throttle)
 				next_target = THERMAL_NO_TARGET;
 		} else {
@@ -158,9 +157,8 @@ static void thermal_zone_trip_update(struct thermal_zone_device *tz, int trip)
 
 	trend = get_tz_trend(tz, trip);
 
-	dev_dbg(&tz->device,
-		"Trip%d[type=%d,temp=%d,hyst=%d]:trend=%d,throttle=%d\n",
-		trip, trip_type, trip_temp, hyst_temp, trend, throttle);
+	dev_dbg(&tz->device, "Trip%d[type=%d,temp=%d]:trend=%d,throttle=%d\n",
+				trip, trip_type, trip_temp, trend, throttle);
 
 	mutex_lock(&tz->lock);
 
@@ -190,16 +188,34 @@ static void thermal_zone_trip_update(struct thermal_zone_device *tz, int trip)
 		if (instance->initialized && old_target == instance->target)
 			continue;
 
-		/* Activate a passive thermal instance */
-		if (old_target == THERMAL_NO_TARGET &&
-			instance->target != THERMAL_NO_TARGET) {
-			update_passive_instance(tz, trip_type, 1);
-			trace_thermal_zone_trip(tz, trip, trip_type, true);
-		/* Deactivate a passive thermal instance */
-		} else if (old_target != THERMAL_NO_TARGET &&
-			instance->target == THERMAL_NO_TARGET) {
-			update_passive_instance(tz, trip_type, -1);
-			trace_thermal_zone_trip(tz, trip, trip_type, false);
+		if (!instance->initialized) {
+			if (instance->target != THERMAL_NO_TARGET) {
+				trace_thermal_zone_trip(tz, trip, trip_type,
+							true);
+				update_passive_instance(tz, trip_type, 1);
+			}
+		} else {
+			/* Activate a passive thermal instance */
+			if (old_target == THERMAL_NO_TARGET &&
+				instance->target != THERMAL_NO_TARGET) {
+				trace_thermal_zone_trip(tz, trip, trip_type,
+							true);
+				update_passive_instance(tz, trip_type, 1);
+			/* Deactivate a passive thermal instance */
+			} else if (old_target != THERMAL_NO_TARGET &&
+				instance->target == THERMAL_NO_TARGET) {
+				trace_thermal_zone_trip(tz, trip, trip_type,
+							false);
+				update_passive_instance(tz, trip_type, -1);
+			}
+		}
+
+		if (old_target != instance->target) {
+			dev_info_ratelimited(
+				&tz->device,
+				"tz:%s, temp:%d, cdev:%s, target:%d\n",
+				tz->type, tz->temperature, instance->cdev->type,
+				instance->target);
 		}
 
 		instance->initialized = true;
@@ -214,8 +230,7 @@ static void thermal_zone_trip_update(struct thermal_zone_device *tz, int trip)
 /**
  * step_wise_throttle - throttles devices associated with the given zone
  * @tz - thermal_zone_device
- * @trip - the trip point
- * @trip_type - type of the trip point
+ * @trip - trip point index
  *
  * Throttling Logic: This uses the trend of the thermal zone to throttle.
  * If the thermal zone is 'heating up' this throttles all the cooling

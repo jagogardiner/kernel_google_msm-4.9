@@ -30,6 +30,7 @@
 #define SCM_SVC_SMMU_PROGRAM		0x15
 #define SCM_SVC_QDSS			0x16
 #define SCM_SVC_TZSCHEDULER		0xFC
+#define SCM_SVC_TSENS			0x1E
 
 #define SCM_FUSE_READ			0x7
 #define SCM_CMD_HDCP			0x01

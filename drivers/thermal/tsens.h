@@ -1,15 +1,8 @@
-/* Copyright (c) 2017-2018, The Linux Foundation. All rights reserved.
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 and
- * only version 2 as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
+/* SPDX-License-Identifier: GPL-2.0-only */
+/*
+ * Copyright (c) 2017-2020, The Linux Foundation. All rights reserved.
  */
+
 #ifndef __QCOM_TSENS_H__
 #define __QCOM_TSENS_H__
 
@@ -20,17 +13,27 @@
 #include <linux/workqueue.h>
 #include <linux/io.h>
 #include <linux/delay.h>
+#include <linux/ipc_logging.h>
 
-#define DEBUG_SIZE				10
+#define DEBUG_SIZE					10
 #define TSENS_MAX_SENSORS			16
-#define TSENS_1x_MAX_SENSORS			11
+#define TSENS_NUM_SENSORS_8937		11
+#define TSENS_NUM_SENSORS_405		10
 #define TSENS_CONTROLLER_ID(n)			(n)
 #define TSENS_CTRL_ADDR(n)			(n)
 #define TSENS_TM_SN_STATUS(n)			((n) + 0xa0)
 
+#define TSENS_DRIVER_NAME			"msm-tsens"
+
 #define ONE_PT_CALIB		0x1
 #define ONE_PT_CALIB2		0x2
 #define TWO_PT_CALIB		0x3
+
+#define SLOPE_FACTOR		1000
+#define SLOPE_DEFAULT		3200
+
+#define IPC_LOGPAGES 10
+#define MIN_TEMP_DEF_OFFSET		0xFF
 
 enum tsens_dbg_type {
 	TSENS_DBG_POLL,
@@ -45,7 +48,55 @@ enum tsens_dbg_type {
 
 struct tsens_device;
 
-#if defined(CONFIG_THERMAL_TSENS)
+#ifdef CONFIG_DEBUG_FS
+#define TSENS_IPC(idx, dev, msg, args...) do { \
+		if (dev) { \
+			if ((idx == 0) && (dev)->ipc_log0) \
+				ipc_log_string((dev)->ipc_log0, \
+					"%s: " msg, __func__, args); \
+			else if ((idx == 1) && (dev)->ipc_log1) \
+				ipc_log_string((dev)->ipc_log1, \
+					"%s: " msg, __func__, args); \
+			else if ((idx == 2) && (dev)->ipc_log2) \
+				ipc_log_string((dev)->ipc_log2, \
+					"%s: " msg, __func__, args); \
+			else \
+				pr_debug("tsens: invalid logging index\n"); \
+		} \
+	} while (0)
+#define TSENS_DUMP(dev, msg, args...) do {				\
+		TSENS_IPC(2, dev, msg, args); \
+		pr_info(msg, ##args);	\
+	} while (0)
+#define TSENS_ERR(dev, msg, args...) do {				\
+		pr_err(msg, ##args);	\
+		TSENS_IPC(1, dev, msg, args); \
+	} while (0)
+#define TSENS_INFO(dev, msg, args...) do {				\
+		pr_info(msg, ##args);	\
+		TSENS_IPC(1, dev, msg, args); \
+	} while (0)
+#define TSENS_DBG(dev, msg, args...) do {				\
+		pr_debug(msg, ##args);	\
+		if (dev) { \
+			TSENS_IPC(0, dev, msg, args); \
+		}	\
+	} while (0)
+#define TSENS_DBG1(dev, msg, args...) do {				\
+		pr_debug(msg, ##args);	\
+		if (dev) { \
+			TSENS_IPC(1, dev, msg, args); \
+		}	\
+	} while (0)
+#else
+#define	TSENS_DBG1(dev, msg, x...)		pr_debug(msg, ##x)
+#define	TSENS_DBG(dev, msg, x...)		pr_debug(msg, ##x)
+#define	TSENS_INFO(dev, msg, x...)		pr_info(msg, ##x)
+#define	TSENS_ERR(dev, msg, x...)		pr_err(msg, ##x)
+#define	TSENS_DUMP(dev, msg, x...)		pr_info(msg, ##x)
+#endif
+
+#if IS_ENABLED(CONFIG_THERMAL_TSENS)
 int tsens2xxx_dbg(struct tsens_device *data, u32 id, u32 dbg_type, int *temp);
 #else
 static inline int tsens2xxx_dbg(struct tsens_device *data, u32 id,
@@ -88,6 +139,7 @@ struct tsens_sensor {
 	struct tsens_context		thr_state;
 	int				offset;
 	int				slope;
+	int				emul_temperature;
 };
 
 /**
@@ -96,18 +148,20 @@ struct tsens_sensor {
  * @get_temp: Function which returns the temp in millidegC
  */
 struct tsens_ops {
-	int (*hw_init)(struct tsens_device *);
-	int (*get_temp)(struct tsens_sensor *, int *);
-	int (*set_trips)(struct tsens_sensor *, int, int);
-	int (*interrupts_reg)(struct tsens_device *);
-	int (*dbg)(struct tsens_device *, u32, u32, int *);
-	int (*sensor_en)(struct tsens_device *, u32);
-	int (*calibrate)(struct tsens_device *);
+	int (*hw_init)(struct tsens_device *tmdev);
+	int (*get_temp)(struct tsens_sensor *tm_sensor, int *temp);
+	int (*set_trips)(struct tsens_sensor *tm_sensor, int low, int high);
+	int (*interrupts_reg)(struct tsens_device *tmdev);
+	int (*dbg)(struct tsens_device *tmdev, u32 id, u32 dbg_type,
+								int *temp);
+	int (*sensor_en)(struct tsens_device *tmdev, u32 sensor_id);
+	int (*calibrate)(struct tsens_device *tmdev);
+	int (*set_emul_temp)(struct tsens_sensor *tm_sensor, int *temp);
 };
 
 struct tsens_irqs {
 	const char			*name;
-	irqreturn_t (*handler)(int, void *);
+	irqreturn_t (*handler)(int irq, void *data);
 };
 
 /**
@@ -149,16 +203,34 @@ struct tsens_device {
 	void __iomem			*tsens_tm_addr;
 	void __iomem			*tsens_calib_addr;
 	const struct tsens_ops		*ops;
+	void					*ipc_log0;
+	void					*ipc_log1;
+	void					*ipc_log2;
+	phys_addr_t				phys_addr_tm;
 	struct tsens_dbg_context	tsens_dbg;
 	spinlock_t			tsens_crit_lock;
 	spinlock_t			tsens_upp_low_lock;
 	const struct tsens_data		*ctrl_data;
 	struct tsens_mtc_sysfs  mtcsys;
-	struct tsens_sensor		sensor[0];
+	int				trdy_fail_ctr;
+	struct tsens_sensor		min_temp;
+	u8				min_temp_sensor_id;
+	struct workqueue_struct		*tsens_reinit_work;
+	struct work_struct		therm_fwk_notify;
+	bool				tsens_reinit_wa;
+	int				tsens_reinit_cnt;
+	struct tsens_sensor             sensor[0];
 };
 
-extern const struct tsens_data data_tsens2xxx, data_tsens23xx, data_tsens24xx;
-extern const struct tsens_data data_tsens14xx;
+extern const struct tsens_data data_tsens2xxx, data_tsens23xx, data_tsens24xx,
+		data_tsens26xx;
+extern const struct tsens_data data_tsens14xx, data_tsens14xx_405;
 extern struct list_head tsens_device_list;
+
+extern int calibrate_8937(struct tsens_device *tmdev);
+extern int calibrate_405(struct tsens_device *tmdev);
+
+extern int tsens_2xxx_get_min_temp(
+		struct tsens_sensor *sensor, int *temp);
 
 #endif /* __QCOM_TSENS_H__ */
