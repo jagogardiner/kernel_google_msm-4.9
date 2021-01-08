@@ -593,7 +593,6 @@ void dpm_noirq_end(void)
 	resume_device_irqs();
 	device_wakeup_disarm_wake_irqs();
 	cpuidle_resume();
-	trace_suspend_resume(TPS("dpm_resume_noirq"), state.event, false);
 }
 
 /**
