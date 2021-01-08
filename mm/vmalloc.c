@@ -368,11 +368,6 @@ static unsigned long lazy_max_pages(void);
 
 static atomic_long_t nr_vmalloc_pages;
 
-unsigned long vmalloc_nr_pages(void)
-{
-	return atomic_long_read(&nr_vmalloc_pages);
-}
-
 #ifdef CONFIG_ENABLE_VMALLOC_SAVING
 #define POSSIBLE_VMALLOC_START	PAGE_OFFSET
 

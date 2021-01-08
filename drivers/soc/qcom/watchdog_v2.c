@@ -416,7 +416,6 @@ static void ping_other_cpus(struct msm_watchdog_data *wdog_dd)
 		if (!cpu_idle_pc_state[cpu])
 			smp_call_function_single(cpu, keep_alive_response,
 						 wdog_dd, 1);
-		}
 	}
 }
 

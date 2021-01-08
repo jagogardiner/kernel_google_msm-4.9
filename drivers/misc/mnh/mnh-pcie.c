@@ -1687,7 +1687,7 @@ static int mnh_irq_init(struct pci_dev *pdev)
 	int err, vector, i;
 	uint32_t msinum = MSI_DMA_WRITE + 1;
 
-	vector = pci_enable_msi_range(pdev, 1, msinum);
+	vector = pci_enable_msi(pdev);
 	dev_err(&pdev->dev, "vector :%d , msi_num:%d, irq:%d\n",
 		vector, msinum, pdev->irq);
 	if (vector < msinum) {
