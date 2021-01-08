@@ -8314,7 +8314,6 @@ static void update_cpu_capacity(struct sched_domain *sd, int cpu)
 	unsigned long max_capacity;
 	int max_cap_cpu;
 	unsigned long flags;
-	bool update = false;
 
 	cpu_rq(cpu)->cpu_capacity_orig = capacity;
 
