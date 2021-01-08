@@ -130,7 +130,7 @@ static void ufshcd_event_record(struct scsi_cmnd *cmd, enum mm_event_type event)
 
 	bio = cmd->request->bio;
 	while (bio) {
-		if (bio->bi_alloc_ts.tv64)
+		if (bio->bi_alloc_ts)
 			mm_event_end(event, bio->bi_alloc_ts);
 		bio = bio->bi_next;
 		if (bio == cmd->request->bio)
